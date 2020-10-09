@@ -65,36 +65,65 @@ def build_trips(car_licenses):
         trip = []
         # Go through the locations of the car
         for i in range(len(car_licenses[car_license]['locations'])):
+            location = car_licenses[car_license]['locations'][i]
             # Check if the car is stationary and after that moving
+            # That's the beginning of the trip
             if i + 1 < len(car_licenses[car_license]['locations'])-1:
-                if car_licenses[car_license]['locations'][i] == "Stationary" and \
-                   car_licenses[car_license]['locations'][i+1] == "Moving":
+                if location['what'] == "Stationary" and \
+                   car_licenses[car_license]['locations'][i+1]['what'] == "Moving":
                     # A new trip has started
-                    trip = [car_licenses[car_license]['locations'][i]]
+                    trip = [location]
+            # Check if the car is stationary and was moving before
+            # That's the end of the trip
+            elif i - 1 >= 0:
+                if location['what'] == 'Stationary' and \
+                   car_licenses[car_license]['locations'][i-1]['what'] == 'Moving':
+                    # Add it to the trip
+                    if location not in trip:
+                        trip.append(location)
+                    # Add trip to trips
+                    trips.append(trip)
+                    # And make trip empty again
+                    trip = []
             # Check if the car is moving
-            elif car_licenses[car_license]['locations'][i]['what'] == 'Moving':
+            elif location['what'] == 'Moving':
                 # Add it to the trip
-                trip.append(car_licenses[car_license]['locations'][i])
+                if location not in trip:
+                    trip.append(location)
                 # If it is the last location in the list
                 # The trip will finish somewhere in the next batches
                 # Just add it as an unfinished trip
                 if i == len(car_licenses[car_license]['locations'])-1:
                     trips.append(trip)
                     trip = []
-            elif i - 1 >= 0:
-                if car_licenses[car_license]['locations'][i]['what'] == 'Stationary' and \
-                   car_licenses[car_license]['locations'][i-1]['what'] == 'Moving':
-                    # Add it to the trip
-                    trip.append(car_licenses[car_license]['locations'][i])
-                    # Add trip to trips
+            # Check if the car is stationary
+            elif location['what'] == "Stationary":
+                # Add it to the trip
+                if location not in trip:
+                    trip.append(location)
+                # If it is the last location in the list
+                # The trip will finish somewhere in the next batches
+                # Just add it as an unfinished trip
+                if i == len(car_licenses[car_license]['locations'])-1:
                     trips.append(trip)
-                    # And make trip empty again
                     trip = []
         # Add unfinished trips to the GCP storage
         trips_to_remove = []
         for i in range(len(trips)):
             # If the last location of a trip is moving
             if trips[i][-1]['what'] == "Moving":
+                # The trip has not finished yet
+                # and should be added to the GCP storage containing
+                # unfinished trips
+                blob_name = f"{car_license}.json"
+                add_unfinished_trip_to_storage(trips[i], blob_name)
+                trips_to_remove.append(i)
+            # If a car is only stationary, without it having moved
+            stationary_counter = 0
+            for t in range(len(trips[i])):
+                if trips[i][t]['what'] == "Stationary":
+                    stationary_counter = stationary_counter + 1
+            if stationary_counter == len(trips[i]):
                 # The trip has not finished yet
                 # and should be added to the GCP storage containing
                 # unfinished trips
@@ -125,15 +154,19 @@ def patch_trips(unfinished_trips, trips, car_license):
                 # Closest time to current trip
                 smallest_time_diff = math.inf
                 closest_trip_in_time = math.inf
+                # Get time of first location in current trip
                 current_trip_timestamp = trips[t][0]['when']
+                # Get time from timestamp
                 current_trip_time = datetime.datetime.strptime(
                     current_trip_timestamp, "%Y-%m-%dT%H:%M:%SZ")
                 # For every unfinished trip of this car license
                 for i in range(len(unfinished_trip_stg['trips'])):
-                    # Calculate the time difference
+                    # Get timestamp of last location of trip in storage
                     unfin_trip_end_timestamp = unfinished_trip_stg['trips'][i][-1]['when']
+                    # Get time from timestamp
                     unfin_trip_end_time = datetime.datetime.strptime(
                         unfin_trip_end_timestamp, "%Y-%m-%dT%H:%M:%SZ")
+                    # Calculate the time difference
                     time_diff = current_trip_time - unfin_trip_end_time
                     time_diff_sec = time_diff.seconds
                     # If time difference is not minus
@@ -159,10 +192,13 @@ def patch_trips(unfinished_trips, trips, car_license):
             # If the unfinished trip is not in storage
             else:
                 # Remove the trip from trips
-                to_rem.pop(t)
-    if not to_rem:
-        for rem in to_rem:
-            trips.remove(rem)
+                to_rem.append(t)
+    # Remove empty trip from trips
+    for rem in to_rem:
+        trips[rem] = []
+    for t in trips:
+        if not t:
+            trips.remove(t)
     # If there is a trip that has not been completely patched yet
     if patch_complete is False:
         # Get the new unfinished trips from GCP storage
@@ -220,7 +256,8 @@ def add_unfinished_trip_to_storage(trip, blob_name):
         blob_json = json.loads(blob_json_string)
         # Update list
         trips = blob_json['trips']
-        trips.append(trip)
+        if trip not in trips:
+            trips.append(trip)
         unfinished_trips = {
             "trips": trips
         }
