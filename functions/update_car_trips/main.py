@@ -50,7 +50,7 @@ def retrieve_and_parse_carsloc_msgs(request):
             for car in cars:
                 if cars[car]['trips']:
                     print(f"Car trips for car {car}")
-                    print(json.dumps(cars[car], indent=2))
+                    print(json.dumps(cars[car]['trips'], indent=2))
                     print("\n")
             print("Finished printing all currently completed trips")
 

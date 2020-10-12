@@ -65,28 +65,37 @@ def build_trips(car_licenses):
         trip = []
         # Go through the locations of the car
         for i in range(len(car_licenses[car_license]['locations'])):
+            # location_checked variable is initialized
+            # it checks if a location has already been added to the trip
+            location_checked = False
             location = car_licenses[car_license]['locations'][i]
             # Check if the car is stationary and after that moving
             # That's the beginning of the trip
-            if i + 1 < len(car_licenses[car_license]['locations'])-1:
+            if i + 1 < len(car_licenses[car_license]['locations'])-1 and \
+               location_checked is False:
                 if location['what'] == "Stationary" and \
                    car_licenses[car_license]['locations'][i+1]['what'] == "Moving":
                     # A new trip has started
                     trip = [location]
+                    location_checked = True
             # Check if the car is stationary and was moving before
             # That's the end of the trip
-            elif i - 1 >= 0:
+            if i - 1 >= 0 and location_checked is False:
                 if location['what'] == 'Stationary' and \
                    car_licenses[car_license]['locations'][i-1]['what'] == 'Moving':
                     # Add it to the trip
                     if location not in trip:
                         trip.append(location)
+                    # Check if there are multiple stationary locations in the trip
+                    trip = remove_multipe_stationary_locations(trip)
                     # Add trip to trips
                     trips.append(trip)
                     # And make trip empty again
                     trip = []
+                    location_checked = True
             # Check if the car is moving
-            elif location['what'] == 'Moving':
+            if location['what'] == 'Moving' and location_checked is False:
+                # print(f"Car {car_license} is moving!")
                 # Add it to the trip
                 if location not in trip:
                     trip.append(location)
@@ -94,10 +103,17 @@ def build_trips(car_licenses):
                 # The trip will finish somewhere in the next batches
                 # Just add it as an unfinished trip
                 if i == len(car_licenses[car_license]['locations'])-1:
+                    # print(f"Car {car_license}'s last location is Moving")
+                    # Check if there are multiple stationary locations in the trip
+                    trip = remove_multipe_stationary_locations(trip)
+                    # Add trip to trips
                     trips.append(trip)
+                    # Make trip empty again
                     trip = []
+                location_checked = True
             # Check if the car is stationary
-            elif location['what'] == "Stationary":
+            elif location['what'] == "Stationary" and location_checked is False:
+                # print(f"Car {car_license} is stationary!")
                 # Add it to the trip
                 if location not in trip:
                     trip.append(location)
@@ -105,8 +121,14 @@ def build_trips(car_licenses):
                 # The trip will finish somewhere in the next batches
                 # Just add it as an unfinished trip
                 if i == len(car_licenses[car_license]['locations'])-1:
+                    # print(f"Car {car_license}'s last location is Stationary")
+                    # Check if there are multiple stationary locations in the trip
+                    trip = remove_multipe_stationary_locations(trip)
+                    # Add trip to trips
                     trips.append(trip)
+                    # Make trip empty again
                     trip = []
+                location_checked = True
         # Add unfinished trips to the GCP storage
         trips_to_remove = []
         for i in range(len(trips)):
@@ -140,6 +162,18 @@ def build_trips(car_licenses):
         car_licenses[car_license]['trips'] = trips
     # return car_licenses
     return car_licenses
+
+
+def remove_multipe_stationary_locations(trip):
+    final_trip = []
+    for t in range(len(trip)):
+        if t + 1 < len(trip) - 1:
+            if not trip[t]['what'] == 'Stationary' and \
+                   trip[t+1]['what'] == 'Stationary':
+                final_trip.append(trip[t])
+        else:
+            final_trip.append(trip[t])
+    return final_trip
 
 
 def patch_trips(unfinished_trips, trips, car_license):
@@ -185,10 +219,13 @@ def patch_trips(unfinished_trips, trips, car_license):
                     unfinished_trips[closest_trip_in_time], f"{car_license}.json")
                 # Check if the start of the trip is moving
                 if trips[t][0]['what'] == 'Moving':
-                    # If it is, the trip has not been completely patched yet
-                    patch_complete = False
                     # Add the trip to GCP storage
                     add_unfinished_trip_to_storage(trips[t], f"{car_license}.json")
+                    # Check if there are any more trips in the blob of this car license
+                    # TODO
+                    if True:
+                        # If there are, the trip has not been completely patched yet
+                        patch_complete = False
             # If the unfinished trip is not in storage
             else:
                 # Remove the trip from trips
@@ -256,6 +293,9 @@ def add_unfinished_trip_to_storage(trip, blob_name):
         blob_json = json.loads(blob_json_string)
         # Update list
         trips = blob_json['trips']
+        # Check if there are multiple stationary locations in the trip
+        trip = remove_multipe_stationary_locations(trip)
+        # Add the trip to the trips of the blob
         if trip not in trips:
             trips.append(trip)
         unfinished_trips = {
