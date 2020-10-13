@@ -68,6 +68,7 @@ def locations_to_stg(car_licenses, storage_client, storage_bucket):
             # Make json
             car = {
                 "license": car_license,
+                "license_hash": license_hash,
                 "locations": car_licenses[car_license]['locations']
             }
             blob.upload_from_string(
@@ -94,6 +95,7 @@ def locations_to_stg(car_licenses, storage_client, storage_bucket):
             # Make new json
             car = {
                 "license": car_license,
+                "license_hash": license_hash,
                 "locations": locations
             }
             # Update blob
