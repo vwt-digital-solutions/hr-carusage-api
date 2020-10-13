@@ -1,7 +1,6 @@
 from google.cloud import storage
 import json
 from datetime import datetime
-from hashlib import sha256
 
 
 def process_carsloc_msg(carsloc_msg, car_licenses, analyze_date):
@@ -17,14 +16,9 @@ def process_carsloc_msg(carsloc_msg, car_licenses, analyze_date):
         # Skip location if it does not have a hashed license
         license_hash = loc.get('license_hash', None)
         if not license_hash:
-            # TODO: uncomment below if license_hash is in message
-            # print(f"Skipping message for {when.date()} while processing {analyze_date} \
-            #         because it does not have a hashed license")
-            # continue
-            # TODO: if above is uncommented, remove below
-            car_li = loc['license']
-            license_hash = sha256(car_li.encode('utf-8')).hexdigest()
-            # TODO: until here
+            print(f"Skipping message for {when.date()} while processing {analyze_date} \
+                    because it does not have a hashed license")
+            continue
         # Else check if the car's license is already in car_locations
         car = car_licenses.get(loc['license'], None)
         # If it is
