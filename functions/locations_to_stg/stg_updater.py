@@ -59,7 +59,7 @@ def locations_to_stg(car_licenses, storage_client, storage_bucket):
     bucket_folder = '{}/{}/{}'.format(year, month, day)
     for car_license in car_licenses:
         # hashed license is the name of the blob
-        license_hash = car_license['license_hash']
+        license_hash = car_licenses[car_license]['license_hash']
         blob_name = f"{bucket_folder}/{license_hash}.json"
         # Check if license is not already in storage
         if not storage.Blob(bucket=storage_bucket, name=blob_name).exists(storage_client):
