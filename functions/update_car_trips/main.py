@@ -212,5 +212,5 @@ if __name__ == '__main__':
             new_car_trips.append(car_trips[c])
     car_trips = new_car_trips
     # Print car trips
-    with open('data.json', 'w', encoding='utf-8') as f:
+    with open('trips.json', 'w', encoding='utf-8') as f:
         json.dump(car_trips, f, ensure_ascii=False, indent=2)

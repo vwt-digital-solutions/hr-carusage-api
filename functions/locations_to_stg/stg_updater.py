@@ -81,8 +81,11 @@ def locations_to_stg(car_licenses, storage_client, storage_bucket):
             blob_json = json.loads(blob_json_string)
             # Get locations of blob
             locations = blob_json['locations']
-            # Add new locations
-            locations.extend(car_licenses[car_license]['locations'])
+            # For every location
+            for loc in car_licenses[car_license]['locations']:
+                # If the location is not yet in locations
+                if loc not in locations:
+                    locations.append(loc)
             # Make new json
             car = {
                 "license": car_license,
