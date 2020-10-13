@@ -14,6 +14,17 @@ def process_carsloc_msg(carsloc_msg, car_licenses, analyze_date):
         if when.date() != analyze_date:
             print(f"Skipping message for {when.date()} while processing {analyze_date}")
             continue
+        # Skip location if it does not have a hashed license
+        license_hash = loc.get('license_hash', None)
+        if not license_hash:
+            # TODO: uncomment below if license_hash is in message
+            # print(f"Skipping message for {when.date()} while processing {analyze_date} \
+            #         because it does not have a hashed license")
+            # continue
+            # TODO: if above is uncommented, remove below
+            car_li = loc['license']
+            license_hash = sha256(car_li.encode('utf-8')).hexdigest()
+            # TODO: until here
         # Else check if the car's license is already in car_locations
         car = car_licenses.get(loc['license'], None)
         # If it is
@@ -38,7 +49,8 @@ def process_carsloc_msg(carsloc_msg, car_licenses, analyze_date):
             }
             car = {
                 loc['license']: {
-                    "locations": [car_loc]
+                    "locations": [car_loc],
+                    "license_hash": license_hash
                 }
             }
             car_licenses.update(car)
@@ -52,9 +64,8 @@ def locations_to_stg(car_licenses, storage_client, storage_bucket):
     day = '{:02d}'.format(today.day)
     bucket_folder = '{}/{}/{}'.format(year, month, day)
     for car_license in car_licenses:
-        # hash the license
-        car_li = car_license
-        license_hash = sha256(car_li.encode('utf-8')).hexdigest()
+        # hashed license is the name of the blob
+        license_hash = car_license['license_hash']
         blob_name = f"{bucket_folder}/{license_hash}.json"
         # Check if license is not already in storage
         if not storage.Blob(bucket=storage_bucket, name=blob_name).exists(storage_client):

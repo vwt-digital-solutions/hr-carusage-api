@@ -1,6 +1,6 @@
 import json
 from google.cloud import storage
-import config
+import functionsconfig as config
 import datetime
 from hashlib import sha256
 
@@ -151,9 +151,7 @@ def remove_multipe_stationary_locations(trip):
     return trip_without_mul_stat_locs
 
 
-if __name__ == '__main__':
-    # Make trips
-    car_trips = make_trips()
+def patch_trips(car_trips):
     # For every car in car_trips
     for car in car_trips:
         car_license = car['license']
@@ -211,6 +209,15 @@ if __name__ == '__main__':
         if c not in to_rem_car_trip:
             new_car_trips.append(car_trips[c])
     car_trips = new_car_trips
+    return car_trips
+
+
+if __name__ == '__main__':
+    # Make trips
+    car_trips = make_trips()
+    # Patch trips
+    car_trips = patch_trips(car_trips)
     # Print car trips
     with open('trips.json', 'w', encoding='utf-8') as f:
         json.dump(car_trips, f, ensure_ascii=False, indent=2)
+    # Upload to firestore

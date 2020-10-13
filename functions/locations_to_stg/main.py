@@ -9,8 +9,6 @@ storage_client = storage.Client()
 storage_bucket = storage_client.get_bucket(config.GCS_BUCKET_CAR_LOCATIONS)
 
 car_licenses = {}
-car_starts = {}
-license_info = {}
 analyze_date = None
 
 
