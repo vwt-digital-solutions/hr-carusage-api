@@ -219,7 +219,7 @@ def patch_trips(car_trips):
     return car_trips
 
 
-if __name__ == '__main__':
+def entrypoint():
     # Make trips
     car_trips = make_trips()
     # Patch trips
@@ -232,3 +232,7 @@ if __name__ == '__main__':
     # with open('trips.json', 'w', encoding='utf-8') as f:
     #     json.dump(car_trips, f, ensure_ascii=False, indent=2)
     logging.info("Finished uploading trips to firestore")
+
+
+if __name__ == '__main__':
+    entrypoint()
