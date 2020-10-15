@@ -1,19 +1,23 @@
 import json
 from google.cloud import storage
-import functionsconfig as config
+import config
 import datetime
-from hashlib import sha256
+from firestore import upload_to_firestore
+import sys
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 storage_client = storage.Client()
 storage_bucket = storage_client.get_bucket(config.GCS_BUCKET_CAR_LOCATIONS)
 
 
 def make_trips():
-    # Make trips from today's locations
-    today = datetime.datetime.today()
-    year = today.year
-    month = '{:02d}'.format(today.month)
-    day = '{:02d}'.format(today.day)
+    # Make trips from yesterday's locations
+    yesterday = datetime.datetime.today() - datetime.timedelta(1)
+    year = yesterday.year
+    month = '{:02d}'.format(yesterday.month)
+    day = '{:02d}'.format(yesterday.day)
     bucket_folder = '{}/{}/{}'.format(year, month, day)
     cars_with_trips = []
     # Loop over every blob in storage, every blob is a single car with locations
@@ -23,16 +27,21 @@ def make_trips():
         car_json_string = car.download_as_string()
         car_json = json.loads(car_json_string)
         car_license = car_json['license']
+        car_license_hash = car_json['license_hash']
         # Make new trips list
         trips = []
         # Make a new trip
         trip = []
         # Loop over every location of the current car
         for i in range(len(car_json['locations'])):
-            # location_checked variable is initialized
-            # it checks if a location has already been added to the trip
+            # Location_checked variable is initialized
+            # It checks if a location has already been added to the trip
             location_checked = False
             location = car_json['locations'][i]
+            # Set location's when to a datetime instead of a timestamp
+            when = location['when']
+            when_datetime = datetime.datetime.strptime(when, "%Y-%m-%dT%H:%M:%SZ")
+            location['when'] = when_datetime
             # Check if the car is stationary and after that moving
             # That's the beginning of the trip
             if i + 1 < len(car_json['locations'])-1 and \
@@ -57,7 +66,6 @@ def make_trips():
                     location_checked = True
             # Check if the car is moving
             if location['what'] == 'Moving' and location_checked is False:
-                # print(f"Car {car_license} is moving!")
                 # Add it to the trip
                 if location not in trip:
                     trip.append(location)
@@ -65,7 +73,6 @@ def make_trips():
                 # The trip will finish somewhere the next day
                 # Just add it
                 if i == len(car_json['locations'])-1:
-                    # print(f"Car {car_license}'s last location is Moving")
                     # Add trip to trips
                     trips.append(trip)
                     # Make trip empty again
@@ -73,7 +80,6 @@ def make_trips():
                 location_checked = True
             # Check if the car is stationary
             elif location['what'] == "Stationary" and location_checked is False:
-                # print(f"Car {car_license} is stationary!")
                 # Add it to the trip
                 if location not in trip:
                     trip.append(location)
@@ -81,7 +87,6 @@ def make_trips():
                 # This could be the start of a new trip
                 # Just add it
                 if i == len(car_json['locations'])-1:
-                    # print(f"Car {car_license}'s last location is Stationary")
                     # Add trip to trips
                     trips.append(trip)
                     # Make trip empty again
@@ -89,23 +94,23 @@ def make_trips():
                 location_checked = True
         car_with_trips = {
             "license": car_license,
+            "license_hash": car_license_hash,
             "trips": trips
         }
         cars_with_trips.append(car_with_trips)
     return cars_with_trips
 
 
-def patch_trip(trip, car_license):
-    # Get yesterday's locations
-    yesterday = datetime.datetime.today() - datetime.timedelta(1)
-    year = yesterday.year
-    month = '{:02d}'.format(yesterday.month)
-    day = '{:02d}'.format(yesterday.day)
+def patch_trip(trip, car_license_hash):
+    # Get the locations from the day before yesterday
+    day_before_yesterday = datetime.datetime.today() - datetime.timedelta(days=2)
+    year = day_before_yesterday.year
+    month = '{:02d}'.format(day_before_yesterday.month)
+    day = '{:02d}'.format(day_before_yesterday.day)
     bucket_folder = '{}/{}/{}'.format(year, month, day)
-    car_li = car_license
-    car_license_hash = sha256(car_li.encode('utf-8')).hexdigest()
+    car_license_hash = car_license_hash
     blob_name = f"{bucket_folder}/{car_license_hash}.json"
-    # Check if there are locations yesterday for this license
+    # Check if there are locations the day before yesterday for this license
     if storage.Blob(bucket=storage_bucket, name=blob_name).exists(storage_client):
         # Get blob
         blob = storage_bucket.get_blob(blob_name)
@@ -119,8 +124,15 @@ def patch_trip(trip, car_license):
         add_to_trip = []
         i = len(locations)-1
         while i >= 0:
-            while locations[i]['what'] != "Stationary":
-                add_to_trip.append(locations[i])
+            location = locations[i]
+            # Set location's when to a datetime instead of a timestamp
+            when = location['when']
+            when_datetime = datetime.datetime.strptime(when, "%Y-%m-%dT%H:%M:%S")
+            location['when'] = when_datetime
+            # While location is not stationary
+            while location['what'] != "Stationary":
+                # Keep adding the location to a trip
+                add_to_trip.append(location)
                 if i - 1 < 0:
                     # If i - 1 is smaller than zero
                     # No stationary location is found in yesterday's locations
@@ -128,38 +140,26 @@ def patch_trip(trip, car_license):
                     return []
                 i = i - 1
             # Stationary location is found
-            add_to_trip.append(locations[i])
+            add_to_trip.append(location)
             i = -1
         # Now the locations to be added need to be reversed in order to add them to the trip
         add_to_trip = add_to_trip[::-1]
         # Now add the locations in front of the trip
         trip[0:0] = add_to_trip
         return trip
-    # If there are no locations yesterday, remove this trip
+    # If there are no locations the day before yesterday, remove this trip
     return []
-
-
-def remove_multipe_stationary_locations(trip):
-    trip_without_mul_stat_locs = []
-    for t in range(len(trip)):
-        if t + 1 < len(trip) - 1:
-            if not trip[t]['what'] == 'Stationary' and \
-                   trip[t+1]['what'] == 'Stationary':
-                trip_without_mul_stat_locs.append(trip[t])
-        else:
-            trip_without_mul_stat_locs.append(trip[t])
-    return trip_without_mul_stat_locs
 
 
 def patch_trips(car_trips):
     # For every car in car_trips
     for car in car_trips:
-        car_license = car['license']
+        car_license_hash = car['license_hash']
         # Check if first trip of the car starts with moving
         # Because if it does, the trip has started yesterday and was only finished today
         trip = car['trips'][0]
         if trip[0]['what'] == "Moving":
-            trip = patch_trip(trip, car_license)
+            trip = patch_trip(trip, car_license_hash)
             # If trip is now empty
             if not trip:
                 # There were no locations yesterday, trip can be removed
@@ -179,14 +179,21 @@ def patch_trips(car_trips):
         if car['trips']:
             to_rem_trip = []
             new_trips = []
+            # For every trip of the car
             for t in range(len(car['trips'])):
                 to_rem_loc = []
                 new_trip = []
+                # For every location in a trip
                 for loc in range(len(car['trips'][t])):
+                    # Check if a previous location get is possible
                     if loc - 1 >= 0:
+                        # If the current location is stationary and the last location
+                        # is stationary as well
                         if car['trips'][t][loc-1]['what'] == 'Stationary' and \
                            car['trips'][t][loc]['what'] == 'Stationary':
+                            # Remove the last stationary location
                             to_rem_loc.append(loc-1)
+                # Only add locations that did not have to be removed
                 for loc in range(len(car['trips'][t])):
                     if loc not in to_rem_loc:
                         new_trip.append(car['trips'][t][loc])
@@ -217,7 +224,11 @@ if __name__ == '__main__':
     car_trips = make_trips()
     # Patch trips
     car_trips = patch_trips(car_trips)
-    # Print car trips
-    with open('trips.json', 'w', encoding='utf-8') as f:
-        json.dump(car_trips, f, ensure_ascii=False, indent=2)
     # Upload to firestore
+    upload_to_firestore_success = upload_to_firestore(car_trips)
+    if not upload_to_firestore_success:
+        sys.exit(1)
+    # Print car trips
+    # with open('trips.json', 'w', encoding='utf-8') as f:
+    #     json.dump(car_trips, f, ensure_ascii=False, indent=2)
+    logging.info("Finished uploading trips to firestore")
