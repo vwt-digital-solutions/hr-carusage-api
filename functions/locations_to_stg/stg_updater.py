@@ -1,6 +1,6 @@
 from google.cloud import storage
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 def process_carsloc_msg(carsloc_msg, car_licenses, analyze_date):
@@ -10,6 +10,15 @@ def process_carsloc_msg(carsloc_msg, car_licenses, analyze_date):
     for loc in carsmsglocations_list:
         # Skip location if it's not today's date
         when = datetime.strptime(loc['when'], "%Y-%m-%dT%H:%M:%SZ")
+        # Convert 'when' to UTC time
+        when_timestamp = when.timestamp()
+        when_utc = datetime.fromtimestamp(when_timestamp, tz=timezone.utc)
+        when_iso = when_utc.isoformat()
+        # Remove the +... behind the timestamp
+        # and set the when of the location to UTC time
+        loc['when'] = when_iso.split('+')[0]
+        when = datetime.strptime(loc['when'], "%Y-%m-%dT%H:%M:%S")
+        # Check if it's today's date
         if when.date() != analyze_date:
             print(f"Skipping message for {when.date()} while processing {analyze_date}")
             continue
@@ -50,12 +59,11 @@ def process_carsloc_msg(carsloc_msg, car_licenses, analyze_date):
             car_licenses.update(car)
 
 
-def locations_to_stg(car_licenses, storage_client, storage_bucket):
-    # Get today's date for the storage bucket
-    today = datetime.today()
-    year = today.year
-    month = '{:02d}'.format(today.month)
-    day = '{:02d}'.format(today.day)
+def locations_to_stg(analyze_date, car_licenses, storage_client, storage_bucket):
+    # Get date for the storage bucket
+    year = analyze_date.year
+    month = '{:02d}'.format(analyze_date.month)
+    day = '{:02d}'.format(analyze_date.day)
     bucket_folder = '{}/{}/{}'.format(year, month, day)
     for car_license in car_licenses:
         # hashed license is the name of the blob

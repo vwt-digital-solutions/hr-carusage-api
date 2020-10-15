@@ -43,7 +43,7 @@ def retrieve_and_parse_carsloc_msgs(request):
         subscriber.close()
 
         # Put locations in storage
-        locations_to_stg(car_licenses, storage_client, storage_bucket)
+        locations_to_stg(analyze_date, car_licenses, storage_client, storage_bucket)
 
 
 if __name__ == '__main__':
