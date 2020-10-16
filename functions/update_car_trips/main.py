@@ -40,7 +40,7 @@ def make_trips():
             location = car_json['locations'][i]
             # Set location's when to a datetime instead of a timestamp
             when = location['when']
-            when_datetime = datetime.datetime.strptime(when, "%Y-%m-%dT%H:%M:%SZ")
+            when_datetime = datetime.datetime.strptime(when, "%Y-%m-%dT%H:%M:%S")
             location['when'] = when_datetime
             # Check if the car is stationary and after that moving
             # That's the beginning of the trip
