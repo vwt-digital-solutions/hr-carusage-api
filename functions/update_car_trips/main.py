@@ -219,7 +219,7 @@ def patch_trips(car_trips):
     return car_trips
 
 
-def entrypoint():
+def entrypoint(request):
     # Make trips
     car_trips = make_trips()
     # Patch trips
@@ -235,4 +235,4 @@ def entrypoint():
 
 
 if __name__ == '__main__':
-    entrypoint()
+    entrypoint(None)
