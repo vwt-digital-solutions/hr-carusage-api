@@ -26,7 +26,6 @@ class MarkFirestoreEntities(object):
     def update_firestore_entity(self, entity_id, field, value):
         doc_ref = self.collection.document(entity_id)
         doc_ref.update({field: value})
-        # doc_ref.update({field: firestore.DELETE_FIELD})
 
     def mark_collection(self):
         for entity in self.entities:
