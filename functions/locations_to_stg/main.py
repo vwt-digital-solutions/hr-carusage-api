@@ -25,25 +25,23 @@ def retrieve_and_parse_carsloc_msgs(request):
     global car_licenses
     analyze_date = date.today()
 
-    if analyze_date.weekday() < 5:
+    subscriber = pubsub_v1.SubscriberClient()
+    subscription_path = subscriber.subscription_path(config.PUBSUB_PROJECT_ID, config.PUBSUB_SUBSCRIPTION_NAME)
+    streaming_pull_future = subscriber.subscribe(subscription_path, callback=callback_handle_message)
+    print(f"Listening for messages on {subscription_path}...")
 
-        subscriber = pubsub_v1.SubscriberClient()
-        subscription_path = subscriber.subscription_path(config.PUBSUB_PROJECT_ID, config.PUBSUB_SUBSCRIPTION_NAME)
-        streaming_pull_future = subscriber.subscribe(subscription_path, callback=callback_handle_message)
-        print(f"Listening for messages on {subscription_path}...")
+    # Wrap subscriber in a 'with' block to automatically call close() when done.
+    with subscriber:
+        try:
+            streaming_pull_future.result(timeout=5)
+        except Exception as e:
+            streaming_pull_future.cancel()
+            print(f"Listening for messages on {subscription_path} threw an exception: {e}.")
 
-        # Wrap subscriber in a 'with' block to automatically call close() when done.
-        with subscriber:
-            try:
-                streaming_pull_future.result(timeout=5)
-            except Exception as e:
-                streaming_pull_future.cancel()
-                print(f"Listening for messages on {subscription_path} threw an exception: {e}.")
+    subscriber.close()
 
-        subscriber.close()
-
-        # Put locations in storage
-        locations_to_stg(analyze_date, car_licenses, storage_client, storage_bucket)
+    # Put locations in storage
+    locations_to_stg(analyze_date, car_licenses, storage_client, storage_bucket)
 
 
 if __name__ == '__main__':

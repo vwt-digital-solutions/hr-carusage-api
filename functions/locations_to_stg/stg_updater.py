@@ -1,6 +1,9 @@
 from google.cloud import storage
 import json
 from datetime import datetime, timezone
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 
 def process_carsloc_msg(carsloc_msg, car_licenses, analyze_date):
@@ -20,13 +23,13 @@ def process_carsloc_msg(carsloc_msg, car_licenses, analyze_date):
         when = datetime.strptime(loc['when'], "%Y-%m-%dT%H:%M:%S")
         # Check if it's today's date
         if when.date() != analyze_date:
-            print(f"Skipping message for {when.date()} while processing {analyze_date}")
+            logging.debug(f"Skipping message for {when.date()} while processing {analyze_date}")
             continue
         # Skip location if it does not have a hashed license
         license_hash = loc.get('license_hash', None)
         if not license_hash:
-            print(f"Skipping message for {when.date()} while processing {analyze_date} \
-                    because it does not have a hashed license")
+            logging.debug(f"Skipping message for {when.date()} while processing {analyze_date} \
+                            because it does not have a hashed license")
             continue
         # Else check if the car's license is already in car_locations
         car = car_licenses.get(loc['license'], None)
