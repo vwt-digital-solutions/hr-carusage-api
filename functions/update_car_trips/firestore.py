@@ -12,7 +12,10 @@ def upload_to_firestore(car_trips):
         car_license_hash = car['license_hash']
         for trip in car['trips']:
             # Get start and end time
-            started_at = trip[0]['when']
+            # Since there can be a lot of time between the first
+            # stationary location and the first moving location
+            # the first start time is the first moving location
+            started_at = trip[1]['when']
             ended_at = trip[-1]['when']
             # Make firestore entity
             firestore_entity = {
