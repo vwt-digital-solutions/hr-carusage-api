@@ -1,5 +1,5 @@
 import json
-from datetime import date
+from datetime import datetime
 from google.cloud import storage
 from google.cloud import pubsub_v1
 import config
@@ -23,7 +23,9 @@ def callback_handle_message(carsloc_msg):
 def retrieve_and_parse_carsloc_msgs(request):
     global analyze_date
     global car_licenses
-    analyze_date = date.today()
+    # Get analyze date in utc
+    now_utc = datetime.utcnow()
+    analyze_date = now_utc.date()
 
     subscriber = pubsub_v1.SubscriberClient()
     subscription_path = subscriber.subscription_path(config.PUBSUB_PROJECT_ID, config.PUBSUB_SUBSCRIPTION_NAME)
