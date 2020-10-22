@@ -6,7 +6,7 @@ import config
 from stg_updater import process_carsloc_msg, locations_to_stg
 
 storage_client = storage.Client()
-storage_bucket = storage_client.get_bucket(config.GCS_BUCKET_CAR_LOCATIONS)
+storage_bucket = storage_client.get_bucket(config.GCP_BUCKET_CAR_LOCATIONS)
 
 car_licenses = {}
 analyze_date = None
