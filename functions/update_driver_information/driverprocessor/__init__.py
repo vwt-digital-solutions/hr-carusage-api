@@ -10,11 +10,12 @@ logging.basicConfig(level=logging.INFO)
 class DriverProcessor(object):
     def __init__(self):
         self.meta = config.DRIVER_INFORMATION_PROPERTIES[os.environ.get('DATA_SELECTOR', 'Required parameter is missing')]
+        self.data_selector = self.meta['entity_name']
         self.storage_client = storage.Client()
         self.storage_bucket = self.storage_client.get_bucket(config.GCP_BUCKET_CAR_INFORMATION)
 
     def process(self, payload):
-        selector_data = payload.get(os.environ.get('DATA_SELECTOR', 'Required parameter is missing'), [])
+        selector_data = payload.get(self.data_selector, [])
         # Check if drivers information exists
         blob_name = f"{config.DRIVERS_INFORMATION_PATH}"
         if storage.Blob(bucket=self.storage_bucket, name=blob_name).exists(self.storage_client):
