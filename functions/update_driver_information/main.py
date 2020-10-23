@@ -12,8 +12,6 @@ logging.basicConfig(level=logging.INFO)
 def update_drivers(request):
     # Extract data from request
     envelope = json.loads(request.data.decode('utf-8'))
-    # log request
-    logging.info(f"envelope is: {json.dumps(envelope)}")
     payload = base64.b64decode(envelope['message']['data'])
 
     # Extract subscription from subscription string
