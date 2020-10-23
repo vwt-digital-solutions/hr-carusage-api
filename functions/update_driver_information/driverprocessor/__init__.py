@@ -26,6 +26,8 @@ class DriverProcessor(object):
             blob_json = json.loads(blob_json_string)
             # Go through list of updated drivers gotten by topic message
             for driver in selector_data:
+                # print driver
+                logging.info(f"driver is: {json.dumps(driver)}")
                 # For every updated driver, update driver info
                 driver_json = {
                     "last_name": driver['Achternaam'],
@@ -36,6 +38,8 @@ class DriverProcessor(object):
                     "initial": driver['Voorletter']
                 }
                 blob_json['Kenteken'] = driver_json
+                # log blob json
+                logging.info(f"blob_json is: {json.dumps(blob_json)}")
             # Update blob
             new_blob = self.storage_bucket.blob(blob_name)
             new_blob.upload_from_string(
