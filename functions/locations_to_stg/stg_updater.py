@@ -98,16 +98,29 @@ def locations_to_stg(analyze_date, car_licenses, storage_client, storage_bucket)
             blob_json = json.loads(blob_json_string)
             # Get locations of blob
             locations = blob_json['locations']
+            # Make new locations
+            new_locations = []
+            # For every location already in blob
+            for blob_loc in locations:
+                # Check if location has today's date
+                when_blob_loc = datetime.strptime(blob_loc['when'], "%Y-%m-%dT%H:%M:%S")
+                if when_blob_loc.date() == analyze_date:
+                    # If it does, add it to new locations
+                    new_locations.append(blob_loc)
             # For every location
             for loc in car_licenses[car_license]['locations']:
-                # If the location is not yet in locations
-                if loc not in locations:
-                    locations.append(loc)
+                # If the location is not yet in new_locations
+                if loc not in new_locations:
+                    # And the location has today as date
+                    when_loc = datetime.strptime(loc['when'], "%Y-%m-%dT%H:%M:%S")
+                    if when_loc.date() == analyze_date:
+                        # Add location
+                        new_locations.append(loc)
             # Make new json
             car = {
                 "license": car_license,
                 "license_hash": license_hash,
-                "locations": locations
+                "locations": new_locations
             }
             # Update blob
             new_blob = storage_bucket.blob(blob_name)
