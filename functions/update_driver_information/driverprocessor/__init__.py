@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.INFO)
 
 class DriverProcessor(object):
     def __init__(self):
-        self.meta = config.DATA_CATALOG_PROPERTIES[os.environ.get('DATA_SELECTOR', 'Required parameter is missing')]
+        self.meta = config.DRIVER_INFORMATION_PROPERTIES[os.environ.get('DATA_SELECTOR', 'Required parameter is missing')]
         self.storage_client = storage.Client()
         self.storage_bucket = self.storage_client.get_bucket(config.GCP_BUCKET_CAR_INFORMATION)
 
