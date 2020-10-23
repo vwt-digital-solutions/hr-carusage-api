@@ -1,0 +1,2 @@
+google-cloud-firestore==1.9.0
+google-cloud-storage==1.32.0
