@@ -1,12 +1,12 @@
 import json
-from datetime import date
+from datetime import datetime, timezone
 from google.cloud import storage
 from google.cloud import pubsub_v1
 import config
 from stg_updater import process_carsloc_msg, locations_to_stg
 
 storage_client = storage.Client()
-storage_bucket = storage_client.get_bucket(config.GCS_BUCKET_CAR_LOCATIONS)
+storage_bucket = storage_client.get_bucket(config.GCP_BUCKET_CAR_LOCATIONS)
 
 car_licenses = {}
 analyze_date = None
@@ -23,7 +23,11 @@ def callback_handle_message(carsloc_msg):
 def retrieve_and_parse_carsloc_msgs(request):
     global analyze_date
     global car_licenses
-    analyze_date = date.today()
+    # Get analyze date in utc
+    now_utc = datetime.now(timezone.utc)
+    analyze_date = now_utc.date()
+
+    print(f"Current analyze time: {now_utc}")
 
     subscriber = pubsub_v1.SubscriberClient()
     subscription_path = subscriber.subscription_path(config.PUBSUB_PROJECT_ID, config.PUBSUB_SUBSCRIPTION_NAME)

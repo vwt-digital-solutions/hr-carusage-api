@@ -9,7 +9,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 storage_client = storage.Client()
-storage_bucket = storage_client.get_bucket(config.GCS_BUCKET_CAR_LOCATIONS)
+storage_bucket = storage_client.get_bucket(config.GCP_BUCKET_CAR_LOCATIONS)
 
 
 def make_trips():
@@ -22,7 +22,7 @@ def make_trips():
     cars_with_trips = []
     # Loop over every blob in storage, every blob is a single car with locations
     for car in storage_client.list_blobs(
-               config.GCS_BUCKET_CAR_LOCATIONS, prefix=bucket_folder):
+               config.GCP_BUCKET_CAR_LOCATIONS, prefix=bucket_folder):
         # Get its JSON
         car_json_string = car.download_as_string()
         car_json = json.loads(car_json_string)
