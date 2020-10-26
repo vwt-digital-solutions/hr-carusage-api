@@ -1,13 +1,11 @@
-import add_fields_firestore_entities
 import logging
+from add_fields_firestore_entities import AddFieldsToFirestoreEntities
 
 logging.basicConfig(level=logging.INFO)
 
 
 def fields_to_trips(request):
-    add_fields_to_firestore_entities_obj = add_fields_firestore_entities.AddFieldsToFirestoreEntities()
-    # Add fields to firestore collection
-    add_fields_to_firestore_entities_obj.add_fields_to_collection()
+    AddFieldsToFirestoreEntities().add_fields_to_collection()
 
 
 if __name__ == '__main__':
