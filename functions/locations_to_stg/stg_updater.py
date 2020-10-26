@@ -116,15 +116,21 @@ def locations_to_stg(analyze_date, car_licenses, storage_client, storage_bucket)
                     if when_loc.date() == analyze_date:
                         # Add location
                         new_locations.append(loc)
-            # Make new json
-            car = {
-                "license": car_license,
-                "license_hash": license_hash,
-                "locations": new_locations
-            }
-            # Update blob
-            new_blob = storage_bucket.blob(blob_name)
-            new_blob.upload_from_string(
-                data=json.dumps(car, indent=2),
-                content_type='application/json'
-            )
+            # If new locations is not empty
+            if new_locations:
+                # Make new json
+                car = {
+                    "license": car_license,
+                    "license_hash": license_hash,
+                    "locations": new_locations
+                }
+                # Update blob
+                new_blob = storage_bucket.blob(blob_name)
+                new_blob.upload_from_string(
+                    data=json.dumps(car, indent=2),
+                    content_type='application/json'
+                )
+            # If it is
+            else:
+                # Blob should be deleted
+                blob.delete()
