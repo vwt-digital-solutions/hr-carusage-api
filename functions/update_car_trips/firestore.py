@@ -23,7 +23,8 @@ def upload_to_firestore(car_trips):
                 "ended_at": ended_at,
                 "license": car_license,
                 "license_hash": car_license_hash,
-                "locations": trip
+                "locations": trip,
+                "checked": False
             }
             # Upload to firestore
             try:
