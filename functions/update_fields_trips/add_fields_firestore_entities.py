@@ -1,8 +1,8 @@
 from google.cloud import firestore
 from google.cloud import storage
-import datetime
+from datetime import datetime, timedelta, timezone, time as dt_time
 import logging
-from pytz import timezone
+from pytz import timezone as py_timezone
 import config
 import json
 
@@ -35,10 +35,10 @@ class AddFieldsToFirestoreEntities(object):
         return trip_info
 
     def get_entities(self):
-        today = datetime.datetime.now()
-        yesterday = today - datetime.timedelta(1)
-        start_date = datetime.datetime(yesterday.year, yesterday.month, yesterday.day)
-        end_date = datetime.datetime(today.year, today.month, today.day)
+        today = datetime.now(timezone.utc)
+        yesterday = today - timedelta(1)
+        start_date = datetime(yesterday.year, yesterday.month, yesterday.day)
+        end_date = datetime(today.year, today.month, today.day)
 
         self.query = self.query.where("ended_at", ">=", start_date)
         self.query = self.query.where("ended_at", "<", end_date)
@@ -51,7 +51,7 @@ class AddFieldsToFirestoreEntities(object):
             doc_dict['id'] = doc.id
             entities.append(doc_dict)
 
-        logging.info(f"Found {len(entities)} entities for date {datetime.datetime.strftime(yesterday, '%Y-%m-%d')}")
+        logging.info(f"Found {len(entities)} entities for date {datetime.strftime(yesterday, '%Y-%m-%d')}")
         return entities
 
     def update_firestore_entity(self, entity_id, field, value):
@@ -76,12 +76,12 @@ class AddFieldsToFirestoreEntities(object):
         minutes_after = config.time_window['end_time_minutes']
 
         # time window is in Europe/Amsterdam time
-        time_before = datetime.time(hour_before, minutes_before, tzinfo=timezone('Europe/Amsterdam'))
-        time_after = datetime.time(hour_after, minutes_after, tzinfo=timezone('Europe/Amsterdam'))
+        time_before = dt_time(hour_before, minutes_before, tzinfo=py_timezone('Europe/Amsterdam'))
+        time_after = dt_time(hour_after, minutes_after, tzinfo=py_timezone('Europe/Amsterdam'))
 
         # Convert started_at and ended_at of trip to Europe/Amsterdam timezone
-        started_at = entity['started_at'].astimezone(timezone('Europe/Amsterdam')).time()
-        # ended_at = entity['ended_at'].astimezone(timezone('Europe/Amsterdam')).time()
+        started_at = entity['started_at'].astimezone(py_timezone('Europe/Amsterdam')).time()
+        # ended_at = entity['ended_at'].astimezone(py_timezone('Europe/Amsterdam')).time()
 
         if started_at < time_before or started_at > time_after:
             # Entity started before begin time of time window or after end time of time window
