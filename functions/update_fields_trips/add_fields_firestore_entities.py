@@ -13,6 +13,7 @@ class AddFieldsToFirestoreEntities(object):
     def __init__(self):
         self.db = firestore.Client()
         self.collection = self.db.collection(config.collection)
+        self.query = self.db.collection(config.collection)
         self.entities = self.get_entities()
         self.storage_client = storage.Client()
         self.storage_bucket = self.storage_client.get_bucket(config.GCP_BUCKET_CAR_INFORMATION)
@@ -34,13 +35,23 @@ class AddFieldsToFirestoreEntities(object):
         return trip_info
 
     def get_entities(self):
+        today = datetime.datetime.now()
+        yesterday = today - datetime.timedelta(1)
+        start_date = datetime.datetime(yesterday.year, yesterday.month, yesterday.day)
+        end_date = datetime.datetime(today.year, today.month, today.day)
+
+        self.query = self.query.where("ended_at", ">=", start_date)
+        self.query = self.query.where("ended_at", "<", end_date)
+
         entities = []
         # Query for documents
-        for doc in self.collection.stream():
+        for doc in self.query.stream():
             # dict of entity:
             doc_dict = doc.to_dict()
             doc_dict['id'] = doc.id
             entities.append(doc_dict)
+
+        logging.info(f"Found {len(entities)} entities for date {datetime.datetime.strftime(yesterday, '%Y-%m-%d')}")
         return entities
 
     def update_firestore_entity(self, entity_id, field, value):
