@@ -25,7 +25,8 @@ def upload_to_firestore(car_trips):
                 "license_hash": car_license_hash,
                 "locations": trip,
                 "checking_info": {
-                    "checked": False
+                    "trip_kind": None,
+                    "description": None
                 }
             }
             # Upload to firestore
