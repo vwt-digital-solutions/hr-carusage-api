@@ -74,7 +74,9 @@ class AddFieldsToFirestoreEntities(object):
                 batch = self.db_client.batch()  # Creating new batch
                 docs_list = list(docs)
 
-                sample_amount = math.floor((10 * len(docs_list)) / 100.0)  # Get 10 percent of list as sample
+                # Get a percentage of trips as a sample
+                sample_percentage = config.sample_percentage if hasattr(config, 'sample_percentage') else 0
+                sample_amount = math.floor((sample_percentage * len(docs_list)) / 100.0)
                 sampled_list = [doc.id for doc in random.sample(docs_list, sample_amount)] if sample_amount > 0 else []
 
                 if len(docs_list) < batch_limit:
@@ -89,7 +91,7 @@ class AddFieldsToFirestoreEntities(object):
                     if entity_outside_time_window(doc_dict['started_at']):
                         new_fields["outside_time_window"] = True
                         count_out_time_window += 1
-                    elif doc.id in sampled_list:
+                    elif doc.id in sampled_list:  # Mark trip from sample as "outside-time-window"
                         new_fields["outside_time_window"] = True
                         count_out_time_window += 1
                     else:
