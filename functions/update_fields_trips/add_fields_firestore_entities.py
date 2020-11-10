@@ -1,6 +1,8 @@
 import logging
 import config
 import json
+import random
+import math
 
 from google.cloud import firestore
 from google.cloud import storage
@@ -72,6 +74,9 @@ class AddFieldsToFirestoreEntities(object):
                 batch = self.db_client.batch()  # Creating new batch
                 docs_list = list(docs)
 
+                sample_amount = math.floor((10 * len(docs_list)) / 100.0)  # Get 10 percent of list as sample
+                sampled_list = [doc.id for doc in random.sample(docs_list, sample_amount)] if sample_amount > 0 else []
+
                 if len(docs_list) < batch_limit:
                     batch_has_new_entities = False
 
@@ -82,6 +87,9 @@ class AddFieldsToFirestoreEntities(object):
                     batch_last_reference = doc
 
                     if entity_outside_time_window(doc_dict['started_at']):
+                        new_fields["outside_time_window"] = True
+                        count_out_time_window += 1
+                    elif doc.id in sampled_list:
                         new_fields["outside_time_window"] = True
                         count_out_time_window += 1
                     else:
