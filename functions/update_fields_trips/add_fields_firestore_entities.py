@@ -17,6 +17,11 @@ class AddFieldsToFirestoreEntities(object):
         self.db_client = firestore.Client()
         self.storage_client = storage.Client()
 
+        today = datetime.now(timezone.utc)
+        yesterday = today - timedelta(1)
+        self.start_date = datetime(yesterday.year, yesterday.month, yesterday.day)
+        self.end_date = datetime(today.year, today.month, today.day)
+
         self.trip_information = self.init_trip_information()  # Retrieve all driver and business unit information
 
     def init_trip_information(self):
@@ -39,15 +44,7 @@ class AddFieldsToFirestoreEntities(object):
 
         return trip_info
 
-    def add_fields_to_collection(self):
-        if not self.trip_information['drivers']:
-            raise FileNotFoundError('No driver information found')
-
-        today = datetime.now(timezone.utc)
-        yesterday = today - timedelta(1)
-        start_date = datetime(yesterday.year, yesterday.month, yesterday.day)
-        end_date = datetime(today.year, today.month, today.day)
-
+    def mark_trips_time_window(self):
         batch_limit = 500
         batch_has_new_entities = True
         batch_last_reference = None
@@ -56,11 +53,13 @@ class AddFieldsToFirestoreEntities(object):
         count_in_time_window = 0
         count_driver = 0
 
+        trips_in_time_window = []
+
         while batch_has_new_entities:
             query = self.db_client.collection(config.collection)
 
-            query = query.where("ended_at", ">=", start_date)
-            query = query.where("ended_at", "<", end_date)
+            query = query.where("ended_at", ">=", self.start_date)
+            query = query.where("ended_at", "<", self.end_date)
             query = query.where("outside_time_window", "==", None)
             query = query.limit(batch_limit)
 
@@ -96,6 +95,7 @@ class AddFieldsToFirestoreEntities(object):
                         count_out_time_window += 1
                     else:
                         new_fields["outside_time_window"] = False
+                        trips_in_time_window.append(doc.reference)
                         count_in_time_window += 1
 
                     driver = self.trip_information['drivers'].get(doc_dict['license'])
@@ -113,6 +113,35 @@ class AddFieldsToFirestoreEntities(object):
         logging.info(
             f"Marked {count_out_time_window} as 'outside time window', {count_in_time_window} as 'inside time window' "
             f"and updated {count_driver} with driver information")
+
+        return trips_in_time_window
+
+    def mark_trips_sample(self, trips_in_time_window):
+        count_out_time_window = 0
+
+        # Get a percentage of trips as a sample
+        sample_percentage = config.sample_percentage if hasattr(config, 'sample_percentage') else 0
+        sample_amount = math.floor((sample_percentage * len(trips_in_time_window)) / 100.0)
+
+        if sample_amount > 0:
+            batch = self.db_client.batch()  # Creating new batch
+
+            for doc in random.sample(trips_in_time_window, sample_amount):
+                batch.update(doc, {'outside_time_window': True})  # Add new fields to batch
+                count_out_time_window += 1
+
+            batch.commit()  # Committing changes within batch
+
+        logging.info(f"Marked a sample of {count_out_time_window} trips as 'outside time window'")
+
+    def add_fields_to_collection(self):
+        if not self.trip_information['drivers']:
+            raise FileNotFoundError('No driver information found')
+
+        trips_in_time_window = self.mark_trips_time_window()  # Mark trips based on time window
+
+        if len(trips_in_time_window) > 0:  # Only mark sample of trips if trips inside time window exist
+            self.mark_trips_sample(trips_in_time_window)
 
     def process_department(self, department):
         if department:
