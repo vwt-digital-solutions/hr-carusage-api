@@ -27,7 +27,8 @@ def upload_to_firestore(car_trips):
                 "checking_info": {
                     "trip_kind": None,
                     "description": None
-                }
+                },
+                "outside_time_window": None
             }
             # Upload to firestore
             try:
