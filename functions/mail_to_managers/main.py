@@ -129,10 +129,14 @@ class FirestoreProcessor(object):
 
 
 def mail_to_managers(request):
-    for key in ['DB_COLLECTION', 'GMAIL_SERVICE_ACCOUNT', 'GMAIL_SUBJECT_ADDRESS', 'GMAIL_REPLYTO_ADDRESS',
-                'GMAIL_SCOPES']:
+    for key in ['DB_COLLECTION', 'GMAIL_ACTIVE', 'GMAIL_SERVICE_ACCOUNT', 'GMAIL_SUBJECT_ADDRESS',
+                'GMAIL_REPLYTO_ADDRESS', 'GMAIL_SCOPES']:
         if not hasattr(config, key):
             raise ValueError(f"Function is missing the essential configuration key '{key}'")
+
+    if not config.GMAIL_ACTIVE:
+        logging.info('Gmail functionality is disabled, finishing execution')
+        return 200
 
     try:
         email_addresses = FirestoreProcessor().get_email_addresses()
