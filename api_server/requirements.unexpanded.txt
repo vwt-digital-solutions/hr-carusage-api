@@ -11,6 +11,7 @@ google-cloud-core==1.3.0
 google-cloud-firestore==1.7.0
 googleapis-common-protos==1.52.0
 grpcio==1.33.2
+gunicorn==20.0.4
 jwkaas==0.7
 pandas==1.1.4
 swagger-ui-bundle==0.0.6
