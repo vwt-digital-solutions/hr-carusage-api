@@ -39,7 +39,7 @@ def retrieve_and_parse_carsloc_msgs(request):
     # Wrap subscriber in a 'with' block to automatically call close() when done.
     with subscriber:
         try:
-            streaming_pull_future.result(timeout=5)
+            streaming_pull_future.result(timeout=300)
         except Exception as e:
             streaming_pull_future.cancel()
             logging.info(f"Listening for messages on {subscription_path} threw an exception: {e}.")
