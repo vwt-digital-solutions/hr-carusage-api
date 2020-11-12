@@ -121,7 +121,7 @@ def patch_trip(trip, car_license_hash, file_name_locations):
         # Convert to json
         blob_json = json.loads(blob_json_string)
         # Get locations of car
-        locations = blob_json[car_license_hash]['locations']
+        locations = blob_json[car_license_hash].get('locations', []) if car_license_hash in blob_json else []
         # Keep adding locations in front of this trip until a Stationary location is found
         add_to_trip = []
         i = len(locations)-1

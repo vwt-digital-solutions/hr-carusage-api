@@ -1,7 +1,6 @@
 import json
 from datetime import datetime, timezone
-from google.cloud import storage
-from google.cloud import pubsub_v1
+from google.cloud import storage, pubsub_v1, exceptions as gcp_exceptions
 import config
 from stg_updater import process_carsloc_msg, locations_to_stg
 import os
@@ -51,8 +50,14 @@ def retrieve_and_parse_carsloc_msgs(request):
         logging.error("Required argument FILE_NAME missing")
     if not file_name_locations.endswith(".json"):
         logging.error("Argument FILE_NAME should have json extension")
-    # Put locations in storage
-    locations_to_stg(analyze_date, car_licenses, storage_client, storage_bucket, file_name_locations)
+
+    try:
+        # Put locations in storage
+        locations_to_stg(analyze_date, car_licenses, storage_client, storage_bucket, file_name_locations)
+    except gcp_exceptions.ServiceUnavailable as e:
+        logging.info("One or more GCP services are unavailable")
+        logging.debug(e)
+        return 400
 
 
 if __name__ == '__main__':

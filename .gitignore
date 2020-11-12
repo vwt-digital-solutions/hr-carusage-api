@@ -2,6 +2,8 @@
 *Config.py
 .vscode/
 
+mail_template.html
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
