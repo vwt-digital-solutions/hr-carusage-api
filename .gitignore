@@ -4,7 +4,8 @@
 sast-config/
 api_server/app.yaml
 api_server/config.py
-api_server/openapi_server/openapi/
+
+startup.sh
 
 mail_template.html
 

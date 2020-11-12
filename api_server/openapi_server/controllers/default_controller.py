@@ -1,137 +1,145 @@
 import config
-import os
-import re
-import base64
+import io
 import logging
+import operator
+import pandas as pd
 
-from openapi_server.controllers.content_controller import create_content_response
-from flask import request, current_app, g, jsonify, make_response
-from google.cloud import kms
+from functools import reduce
+from datetime import datetime
+from flask import request, jsonify, make_response
+from google.cloud import firestore
 
 logging.basicConfig(level=logging.INFO)
 
 
-def check_database_configuration(request_method):
-    existing_config = {
-        'db_client': False if current_app.db_client is None else True,
-        'db_table_name': False if g.db_table_name is None else True,
-        'db_table_id': False if g.db_table_id is None else True,
-        'response_keys': False if (request_method in ['get'] and g.response_keys is None) else True,
-        'db_keys': False if (request_method in ['post', 'put'] and g.db_keys is None) else True
-    }
+def export_trips(ended_after, ended_before):  # noqa: E501
+    """Exports all trip entities to a file
 
-    for key in existing_config:
-        if not existing_config[key]:
-            logging.debug(existing_config)
-            return make_response(jsonify("Database information insufficient"), 500)
+    :param ended_after: Filter for trips that ended after a specific date
+    :type ended_after: string
+    :param ended_before: Filter for trips that ended before a specific date
+    :type ended_before: string
+
+    :rtype: blob
+    """
+
+    db_client = firestore.Client()
+
+    query = db_client.collection(config.COLLECTION_NAME)
+    query = query.where('ended_at', '>=', datetime.strptime(ended_after, "%Y-%m-%dT%H:%M:%SZ"))
+    query = query.where('ended_at', '<=', datetime.strptime(ended_before, "%Y-%m-%dT%H:%M:%SZ"))
+    query = query.where('outside_time_window', '==', True)
+
+    docs = query.stream()
+
+    if docs:
+        response = [{
+            'department_name': get_from_dict(doc, ['department', 'name']),
+            'department_id': get_from_dict(doc, ['department', 'id']),
+            'ended_at': get_from_dict(doc, ['ended_at']),
+            'function_name': get_from_dict(doc, ['driver_info', 'function_name']),
+            'initial': get_from_dict(doc, ['driver_info', 'initial']),
+            'last_name': get_from_dict(doc, ['driver_info', 'last_name']),
+            'license': get_from_dict(doc, ['license']),
+            'prefix': get_from_dict(doc, ['driver_info', 'prefix']),
+            'started_at': get_from_dict(doc, ['started_at']),
+            'trip_kind': get_from_dict(doc, ['checking_info', 'trip_kind']),
+            'trip_description': get_from_dict(doc, ['checking_info', 'description'])
+        } for doc in docs]
+
+        update_database_freq_offenders(response)  # Count frequent offenders and update database
+
+        return ContentResponse().create_content_response(response, request.content_type)
+
+    return make_response(jsonify([]), 204)
 
 
-def check_identifier(kwargs):
-    if g.request_id is None or g.request_id not in kwargs:
-        return make_response(jsonify("Identifier name not found"), 500)
-
-
-def kms_encrypt_decrypt_cursor(cursor, kms_type):
-    if cursor and hasattr(config, 'KMS_KEY_INFO') and \
-            'keyring' in config.KMS_KEY_INFO and \
-            'key' in config.KMS_KEY_INFO and \
-            'location' in config.KMS_KEY_INFO:
-        project_id = os.environ['GOOGLE_CLOUD_PROJECT']
-        location_id = config.KMS_KEY_INFO['location']
-        key_ring_id = config.KMS_KEY_INFO['keyring']
-        crypto_key_id = config.KMS_KEY_INFO['key']
-
-        try:
-            client = kms.KeyManagementServiceClient()
-            name = client.crypto_key_path_path(project_id, location_id, key_ring_id, crypto_key_id)
-
-            if kms_type == 'encrypt':
-                encrypt_response = client.encrypt(name, cursor.encode() if isinstance(cursor, str) else cursor)
-                response = base64.urlsafe_b64encode(encrypt_response.ciphertext).decode()
+def update_database_freq_offenders(results):
+    # Get all licenses that were outside of time window
+    licenses = []
+    if results:
+        for trip in results:
+            trip_license = trip.get('license')
+            if trip_license:
+                licenses.append(trip_license)
             else:
-                encrypt_response = client.decrypt(name, base64.urlsafe_b64decode(cursor))
-                response = encrypt_response.plaintext
-        except Exception as e:
-            logging.error(f"An exception occurred when {kms_type}-ing a cursor: {str(e)}")
-            return None
+                return make_response("Result does not have a 'license' key", 500)
     else:
-        response = cursor
+        return make_response("Response does not have a 'results' key", 500)
 
-    return response
+    # TODO: update frequent offenders
 
 
-def generic_get_multiple():  # noqa: E501
-    """Returns a array of entities
-
-    :param kwargs: Keyword argument list
-    :type kwargs: dict
-
-    :rtype: array
-    """
-
-    # Check for Database configuration
-    db_existence = check_database_configuration('get')
-    if db_existence:
-        return db_existence
-
+def get_from_dict(data_dict, map_list):
+    """Returns a dictionary based on a mapping"""
     try:
-        db_response = current_app.db_client.get_multiple(
-            kind=g.db_table_name, db_keys=g.db_keys, res_keys=g.response_keys, filters=g.request_queries)
-    except ValueError as e:
-        return make_response(jsonify(str(e)), 400)
+        if not isinstance(data_dict, dict):
+            data_dict = data_dict.to_dict()
 
-    if db_response:
-        return create_content_response(db_response, request.content_type)
-
-    return make_response(jsonify([]), 204)
+        return reduce(operator.getitem, map_list, data_dict)
+    except KeyError:
+        return None
 
 
-def generic_get_multiple_page(**kwargs):  # noqa: E501
-    """Returns a dict containing entities and pagination information
+class ContentResponse(object):
+    def __init__(self):
+        pass
 
-    :param kwargs: Keyword argument list
-    :type kwargs: dict
+    @staticmethod
+    def create_dataframe(content):
+        df = pd.DataFrame(content)
+        for col in df.select_dtypes(include=['datetimetz']):
+            df[col] = df[col].apply(lambda a: a.tz_convert('Europe/Amsterdam').tz_localize(None))
 
-    :rtype: array
-    """
+        return df
 
-    # Check for Database configuration
-    db_existence = check_database_configuration('get')
-    if db_existence:
-        return db_existence
+    def response_csv(self, response):
+        """Returns the data as a CSV file"""
 
-    page_cursor = kms_encrypt_decrypt_cursor(kwargs.get('page_cursor', None), 'decrypt')
-    page_size = kwargs.get('page_size', 50)
-    page_action = kwargs.get('page_action', 'next')
+        timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        try:
+            output = io.StringIO()
 
-    try:
-        db_response = current_app.db_client.get_multiple_page(
-            kind=g.db_table_name, db_keys=g.db_keys, res_keys=g.response_keys, filters=g.request_queries,
-            page_cursor=page_cursor, page_size=page_size, page_action=page_action)
-    except ValueError as e:
-        return make_response(jsonify(str(e)), 400)
+            df = self.create_dataframe(response)
+            csv_response = df.to_csv(sep=";", index=False, decimal=",")
 
-    if db_response:
-        url_rule = re.sub(r'<.*?>', '', str(request.url_rule)).strip('/')
-        host_url = config.BASE_URL.rstrip('/') if hasattr(config, 'BASE_URL') else \
-            request.host_url.replace('http://', 'https://')
+            output.write(csv_response)
 
-        if db_response.get('next_page'):
-            next_cursor = kms_encrypt_decrypt_cursor(db_response.get('next_page'), 'encrypt')
+            response = make_response(output.getvalue())
+            response.headers['Content-Type'] = 'text/csv'
+            response.headers['Content-Disposition'] = f"attachment; filename={config.COLLECTION_NAME}_{timestamp}.csv"
+            return response
+        except Exception as e:
+            logging.info(f"Generating CSV file failed: {str(e)}")
+            return make_response('Something went wrong during the generation of a CSV file', 400)
 
-            if not url_rule.endswith("/pages"):
-                url_rule = f"{url_rule}/pages"
+    def response_xlsx(self, response):
+        """Returns the data as a XLSX file"""
 
-            db_response['next_page'] = f"{host_url}/{url_rule}/{next_cursor}?page_size={page_size}&page_action=next"
-        else:
-            db_response['next_page'] = None
+        timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        try:
+            output = io.BytesIO()
+            writer = pd.ExcelWriter(output, engine='xlsxwriter')
 
-        if page_cursor:
-            prev_cursor = kms_encrypt_decrypt_cursor(page_cursor, 'encrypt')
-            db_response['prev_page'] = f"{host_url}/{url_rule}/{prev_cursor}?page_size={page_size}&page_action=prev"
-        else:
-            db_response['prev_page'] = None
+            df = self.create_dataframe(response)
+            df.to_excel(writer, sheet_name=config.COLLECTION_NAME, index=False)
 
-        return create_content_response(db_response, request.content_type)
+            writer.save()
 
-    return make_response(jsonify([]), 204)
+            response = make_response(output.getvalue())
+            response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            response.headers['Content-Disposition'] = f"attachment; filename={config.COLLECTION_NAME}_{timestamp}.xlsx"
+            return response
+        except Exception as e:
+            logging.info(f"Generating XLSX file failed: {str(e)}")
+            return make_response('Something went wrong during the generation of a XLSX file', 400)
+
+    def create_content_response(self, response, content_type):
+        """Creates a response based on the request's content-type"""
+        # Give response
+        if content_type == 'text/csv':  # CSV
+            return self.response_csv(response)
+        elif content_type == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':  # XLSX
+            return self.response_xlsx(response)
+
+        return response  # JSON

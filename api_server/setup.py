@@ -21,10 +21,10 @@ REQUIRES = [
 setup(
     name=NAME,
     version=VERSION,
-    description="Dynamic Data Manipulation API",
+    description="HR Car Usage export API",
     author_email="support@vwt.digital",
     url="",
-    keywords=["OpenAPI", "Dynamic Data Manipulation API"],
+    keywords=["OpenAPI", "HR Car Usage export API"],
     install_requires=REQUIRES,
     packages=find_packages(),
     package_data={'': ['openapi/openapi.yaml']},
@@ -32,6 +32,6 @@ setup(
     entry_points={
         'console_scripts': ['openapi_server=openapi_server.__main__:main']},
     long_description="""\
-    Endpoint to dynamic manipulate data
+    Endpoint to export HR Car Usage data
     """
 )

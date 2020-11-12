@@ -1,14 +1,19 @@
 import logging
 import os
+import connexion
 
-from . import get_app
+from openapi_server import encoder
 from Flask_AuditLog import AuditLog
 from Flask_No_Cache import CacheControl
 from flask_sslify import SSLify
 
 
 def main():
-    app = get_app()
+    app = connexion.App(__name__, specification_dir='./openapi/')
+    app.app.json_encoder = encoder.JSONEncoder
+    app.add_api('openapi.yaml',
+                arguments={'title': 'Expenses API'},
+                pythonic_params=True)
     app.run(port=8080)
 
     logging.basicConfig(level=logging.INFO)
