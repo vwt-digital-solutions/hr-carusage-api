@@ -54,7 +54,6 @@ class MailProcessor(object):
         msg = MIMEMultipart('alternative')
         msg['From'] = config.GMAIL_REPLYTO_ADDRESS
         msg['Subject'] = 'Wekelijkse beoordeling ritten'
-        msg['Reply-To'] = config.GMAIL_SUBJECT_ADDRESS
         msg['To'] = mail_addresses[0]
 
         if len(mail_addresses) > 1:
