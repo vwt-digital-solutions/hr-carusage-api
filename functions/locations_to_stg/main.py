@@ -1,9 +1,12 @@
 import json
 from datetime import datetime, timezone
-from google.cloud import storage
-from google.cloud import pubsub_v1
+from google.cloud import storage, pubsub_v1, exceptions as gcp_exceptions
 import config
 from stg_updater import process_carsloc_msg, locations_to_stg
+import os
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 storage_client = storage.Client()
 storage_bucket = storage_client.get_bucket(config.GCP_BUCKET_CAR_LOCATIONS)
@@ -27,25 +30,34 @@ def retrieve_and_parse_carsloc_msgs(request):
     now_utc = datetime.now(timezone.utc)
     analyze_date = now_utc.date()
 
-    print(f"Current analyze time: {now_utc}")
-
     subscriber = pubsub_v1.SubscriberClient()
     subscription_path = subscriber.subscription_path(config.PUBSUB_PROJECT_ID, config.PUBSUB_SUBSCRIPTION_NAME)
     streaming_pull_future = subscriber.subscribe(subscription_path, callback=callback_handle_message)
-    print(f"Listening for messages on {subscription_path}...")
+    logging.info(f"Listening for messages on {subscription_path}...")
 
     # Wrap subscriber in a 'with' block to automatically call close() when done.
     with subscriber:
         try:
-            streaming_pull_future.result(timeout=5)
+            streaming_pull_future.result(timeout=300)
         except Exception as e:
             streaming_pull_future.cancel()
-            print(f"Listening for messages on {subscription_path} threw an exception: {e}.")
+            logging.info(f"Listening for messages on {subscription_path} threw an exception: {e}.")
 
     subscriber.close()
 
-    # Put locations in storage
-    locations_to_stg(analyze_date, car_licenses, storage_client, storage_bucket)
+    file_name_locations = str(os.environ.get("FILE_NAME"))
+    if not file_name_locations:
+        logging.error("Required argument FILE_NAME missing")
+    if not file_name_locations.endswith(".json"):
+        logging.error("Argument FILE_NAME should have json extension")
+
+    try:
+        # Put locations in storage
+        locations_to_stg(analyze_date, car_licenses, storage_client, storage_bucket, file_name_locations)
+    except gcp_exceptions.ServiceUnavailable as e:
+        logging.info("One or more GCP services are unavailable")
+        logging.debug(e)
+        return 400
 
 
 if __name__ == '__main__':
