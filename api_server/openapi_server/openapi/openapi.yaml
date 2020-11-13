@@ -65,14 +65,14 @@ components:
     filterEndedAfterParam:
       in: query
       name: ended_after
-      required: false
+      required: true
       schema:
         type: string
         format: date-time
       description: Filter for trips that ended after a specific date
     filterEndedBeforeParam:
       in: query
-      required: false
+      required: true
       name: ended_before
       schema:
         type: string
