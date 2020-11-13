@@ -61,11 +61,12 @@ class AddFieldsToFirestoreEntities(object):
             query = query.where("ended_at", ">=", self.start_date)
             query = query.where("ended_at", "<", self.end_date)
             query = query.where("outside_time_window", "==", None)
-            query = query.limit(batch_limit)
+            query = query.order_by("ended_at", "outside_time_window")
 
             if batch_last_reference:
-                query = query.order_by("ended_at")
                 query = query.start_after(batch_last_reference)
+
+            query = query.limit(batch_limit)
 
             docs = query.stream()
 
