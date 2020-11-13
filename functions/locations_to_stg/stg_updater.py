@@ -94,9 +94,9 @@ def locations_to_stg(analyze_date, car_licenses, storage_client, storage_bucket,
             new_locations = []
             # For every location already in blob
             for blob_loc in locations:
-                # Check if location has today's date
+                # Check if location has today's date and is not already in new locations
                 when_blob_loc = datetime.strptime(blob_loc['when'], "%Y-%m-%dT%H:%M:%S")
-                if when_blob_loc.date() == analyze_date:
+                if when_blob_loc.date() == analyze_date and blob_loc not in new_locations:
                     # If it does, add it to new locations
                     new_locations.append(blob_loc)
             # For every location

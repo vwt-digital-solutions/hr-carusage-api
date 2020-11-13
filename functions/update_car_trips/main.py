@@ -51,14 +51,16 @@ def make_trips(file_name_locations):
                 # Check if the car is stationary and after that moving
                 # That's the beginning of the trip
                 if i + 1 < len(locations)-1 and location_checked is False:
-                    if location['what'] == "Stationary" and locations[i+1]['what'] == "Moving":
+                    if (location['what'] == "Stationary" and locations[i+1]['what'] == "Moving") \
+                       or (location['what'] == "ExternalPowerChange" and locations[i+1]['what'] == "Moving"):
                         # A new trip has started
                         trip = [location]
                         location_checked = True
                 # Check if the car is stationary and was moving before
                 # That's the end of the trip
                 if i - 1 >= 0 and location_checked is False:
-                    if location['what'] == 'Stationary' and locations[i-1]['what'] == 'Moving':
+                    if (location['what'] == 'Stationary' and locations[i-1]['what'] == 'Moving') \
+                       or (location['what'] == 'ExternalPowerChange' and locations[i-1]['what'] == 'Moving'):
                         # Add it to the trip
                         if location not in trip:
                             trip.append(location)
@@ -82,7 +84,8 @@ def make_trips(file_name_locations):
                         trip = []
                     location_checked = True
                 # Check if the car is stationary
-                elif location['what'] == "Stationary" and location_checked is False:
+                elif (location['what'] == "Stationary" and location_checked is False) or \
+                     (location['what'] == "ExternalPowerChange" and location_checked is False):
                     # Add it to the trip
                     if location not in trip:
                         trip.append(location)
