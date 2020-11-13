@@ -60,14 +60,12 @@ class AddFieldsToFirestoreEntities(object):
 
             query = query.where("ended_at", ">=", self.start_date)
             query = query.where("ended_at", "<", self.end_date)
-            query = query.where("outside_time_window", "==", None)
-            query = query.order_by("ended_at", "outside_time_window")
+            query = query.order_by("ended_at", direction="ASCENDING")
 
             if batch_last_reference:
                 query = query.start_after(batch_last_reference)
 
             query = query.limit(batch_limit)
-
             docs = query.stream()
 
             if docs:
@@ -83,37 +81,37 @@ class AddFieldsToFirestoreEntities(object):
                     batch_has_new_entities = False
 
                 for doc in docs_list:
-                    new_fields = {}
+                    batch_last_reference = doc
                     doc_dict = doc.to_dict()
 
-                    batch_last_reference = doc
+                    if doc_dict.get('outside_time_window') is None:
+                        new_fields = {}
 
-                    if entity_outside_time_window(doc_dict['started_at']):
-                        new_fields["outside_time_window"] = True
-                        count_out_time_window += 1
-                    elif doc.id in sampled_list:  # Mark trip from sample as "outside-time-window"
-                        new_fields["outside_time_window"] = True
-                        count_out_time_window += 1
-                    else:
-                        new_fields["outside_time_window"] = False
-                        trips_in_time_window.append(doc.reference)
-                        count_in_time_window += 1
+                        if entity_outside_time_window(doc_dict['started_at']):
+                            new_fields["outside_time_window"] = True
+                            count_out_time_window += 1
+                        elif doc.id in sampled_list:  # Mark trip from sample as "outside-time-window"
+                            new_fields["outside_time_window"] = True
+                            count_out_time_window += 1
+                        else:
+                            new_fields["outside_time_window"] = False
+                            trips_in_time_window.append(doc.reference)
+                            count_in_time_window += 1
 
-                    driver = self.trip_information['drivers'].get(doc_dict['license'])
-                    if driver:  # Add driver information to trip
-                        new_fields["department"] = self.process_department(driver.get("department"))
-                        new_fields["driver_info"] = driver
-                        count_driver += 1
+                        driver = self.trip_information['drivers'].get(doc_dict['license'])
+                        if driver:  # Add driver information to trip
+                            new_fields["department"] = self.process_department(driver.get("department"))
+                            new_fields["driver_info"] = driver
+                            count_driver += 1
 
-                    batch.update(doc.reference, new_fields)  # Add new fields to batch
-
+                        batch.update(doc.reference, new_fields)  # Add new fields to batch
                 batch.commit()  # Committing changes within batch
             else:
                 batch_has_new_entities = False
 
         logging.info(
-            f"Marked {count_out_time_window} as 'outside time window', {count_in_time_window} as 'inside time window' "
-            f"and updated {count_driver} with driver information")
+            f"Marked {count_out_time_window} trips as 'outside time window' and {count_in_time_window} as "
+            f"'inside time window'. Updated {count_driver} trips with driver information")
 
         return trips_in_time_window
 
