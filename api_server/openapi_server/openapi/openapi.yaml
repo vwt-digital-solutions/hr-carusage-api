@@ -17,7 +17,7 @@ info:
 servers:
   - url: /
 paths:
-  /trips/export:
+  /export/trips:
     get:
       description: Returns an export with a list of all car trips
       operationId: export_trips
