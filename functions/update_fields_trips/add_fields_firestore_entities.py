@@ -72,11 +72,6 @@ class AddFieldsToFirestoreEntities(object):
                 batch = self.db_client.batch()  # Creating new batch
                 docs_list = list(docs)
 
-                # Get a percentage of trips as a sample
-                sample_percentage = config.sample_percentage if hasattr(config, 'sample_percentage') else 0
-                sample_amount = math.floor((sample_percentage * len(docs_list)) / 100.0)
-                sampled_list = [doc.id for doc in random.sample(docs_list, sample_amount)] if sample_amount > 0 else []
-
                 if len(docs_list) < batch_limit:
                     batch_has_new_entities = False
 
@@ -88,9 +83,6 @@ class AddFieldsToFirestoreEntities(object):
                         new_fields = {}
 
                         if entity_outside_time_window(doc_dict['started_at']):
-                            new_fields["outside_time_window"] = True
-                            count_out_time_window += 1
-                        elif doc.id in sampled_list:  # Mark trip from sample as "outside-time-window"
                             new_fields["outside_time_window"] = True
                             count_out_time_window += 1
                         else:
@@ -113,34 +105,38 @@ class AddFieldsToFirestoreEntities(object):
             f"Marked {count_out_time_window} trips as 'outside time window' and {count_in_time_window} as "
             f"'inside time window'. Updated {count_driver} trips with driver information")
 
-        return trips_in_time_window
-
-    def mark_trips_sample(self, trips_in_time_window):
-        count_out_time_window = 0
-
-        # Get a percentage of trips as a sample
+        # Calculate the sample amount based on the "incorrect" marked trips
         sample_percentage = config.sample_percentage if hasattr(config, 'sample_percentage') else 0
-        sample_amount = math.floor((sample_percentage * len(trips_in_time_window)) / 100.0)
+        sample_amount = math.ceil((sample_percentage * count_out_time_window) / 100.0)
 
-        if sample_amount > 0:
-            batch = self.db_client.batch()  # Creating new batch
+        return trips_in_time_window, sample_amount
 
-            for doc in random.sample(trips_in_time_window, sample_amount):
-                batch.update(doc, {'outside_time_window': True})  # Add new fields to batch
-                count_out_time_window += 1
+    def mark_trips_sample(self, trips_in_time_window, sample_amount):
+        batch = self.db_client.batch()  # Creating new batch
+        current_batch_count = 0
 
-            batch.commit()  # Committing changes within batch
+        for doc in random.sample(trips_in_time_window, sample_amount):
+            if current_batch_count == 500:  # Committing current and creation new batch if batch is full
+                batch.commit()
+                batch = self.db_client.batch()
+                current_batch_count = 0
 
-        logging.info(f"Marked a sample of {count_out_time_window} trips as 'outside time window'")
+            batch.update(doc, {'outside_time_window': True, 'sample': True})  # Add new fields to batch
+            current_batch_count += 1
+
+        batch.commit()  # Committing changes within batch
+
+        logging.info(f"Marked a sample of {sample_amount} trips as 'outside time window'")
 
     def add_fields_to_collection(self):
         if not self.trip_information['drivers']:
             raise FileNotFoundError('No driver information found')
 
-        trips_in_time_window = self.mark_trips_time_window()  # Mark trips based on time window
+        trips_in_time_window, sample_amount = self.mark_trips_time_window()  # Mark trips based on time window
 
-        if len(trips_in_time_window) > 0:  # Only mark sample of trips if trips inside time window exist
-            self.mark_trips_sample(trips_in_time_window)
+        # Only mark sample of trips if trips inside time window exist
+        if sample_amount > 0 and len(trips_in_time_window) > 0:
+            self.mark_trips_sample(trips_in_time_window, sample_amount)
 
     def process_department(self, department):
         if department:
