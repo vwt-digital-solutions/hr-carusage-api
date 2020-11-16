@@ -11,14 +11,11 @@ class FirestoreProcessor(object):
         self.collection = collection
         self.db_client = firestore.Client()
 
-        today = datetime.now(timezone.utc)
-        date_delta = today - timedelta(weeks=delta)  # Get timedelta week
-        date_week_start = date_delta - timedelta(days=date_delta.weekday())  # Get start of week
-        date_week_start = date_week_start + timedelta(days=7)  # Get end of week
+        self.today = datetime.now(timezone.utc)
+        date_delta = self.today - timedelta(weeks=delta)  # Get timedelta week
+        date_week_end = date_delta + timedelta(days=(7 - date_delta.weekday()))  # Get end of week
 
-        self.start_date = datetime(today.year, today.month, today.day)
-        self.start_date = datetime(date_week_start.year, date_week_start.month, date_week_start.day)
-        self.end_date = datetime(date_week_start.year, date_week_start.month, date_week_start.day)
+        self.date_week_end = datetime(date_week_end.year, date_week_end.month, date_week_end.day)
 
     def delete_entities(self):
         batch_limit = 500
@@ -30,8 +27,7 @@ class FirestoreProcessor(object):
         while batch_has_new_entities:
             query = self.db_client.collection(self.collection)
 
-            query = query.where("ended_at", ">=", self.start_date)
-            query = query.where("ended_at", "<", self.end_date)
+            query = query.where("ended_at", "<", self.date_week_end)
             query = query.where("exported.exported_at", "<", self.today)
             query = query.order_by("ended_at", "ASCENDING")
             query = query.limit(batch_limit)
@@ -76,6 +72,6 @@ def purge_entities(request):
 if __name__ == '__main__':
     class R:
         def __init__(self):
-            self.args = {'collection': 'Trips', 'timedelta': 3}
+            self.args = {'collection': 'Trips', 'timedelta': 4}
     r = R()
     purge_entities(r)
