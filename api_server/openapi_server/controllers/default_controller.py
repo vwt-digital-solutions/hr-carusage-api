@@ -61,6 +61,7 @@ def update_frequent_offenders(db_client):
     query_fs_upate = query_fs_upate.where('ended_at', '>=', eight_weeks_mon)
     query_fs_upate = query_fs_upate.where('ended_at', '<=', last_sun)
     query_fs_upate = query_fs_upate.where('outside_time_window', '==', True)
+    query_fs_upate = query_fs_upate.where('department.manager_mail', '==', g.user)
 
     docs_fs_update = query_fs_upate.stream()
 
@@ -68,8 +69,7 @@ def update_frequent_offenders(db_client):
         response_fs_update = []
         every_trip_checkt = True
         for doc in docs_fs_update:
-            if get_from_dict(doc, ['checking_info', 'checked']) is True or \
-                    get_from_dict(doc, ['checking_info', 'checked']) is False:
+            if get_from_dict(doc, ['checking_info', 'trip_kind']) in ['work', 'personal']:
                 offender_dict = {
                     'department_name': get_from_dict(doc, ['department', 'name']),
                     'department_id': get_from_dict(doc, ['department', 'id']),
@@ -109,6 +109,7 @@ def export_all_trips(db_client, ended_after, ended_before, frequent_offenders):
     query_export = query_export.where('ended_at', '>=', datetime.strptime(ended_after, "%Y-%m-%dT%H:%M:%SZ"))
     query_export = query_export.where('ended_at', '<=', datetime.strptime(ended_before, "%Y-%m-%dT%H:%M:%SZ"))
     query_export = query_export.where('outside_time_window', '==', True)
+    query_export = query_export.where('department.manager_mail', '==', g.user)
 
     docs_export = query_export.stream()
 
@@ -117,8 +118,7 @@ def export_all_trips(db_client, ended_after, ended_before, frequent_offenders):
         response_licenses = []
         every_trip_checkt = True
         for doc in docs_export:
-            if get_from_dict(doc, ['checking_info', 'checked']) is True or \
-                    get_from_dict(doc, ['checking_info', 'checked']) is False:
+            if get_from_dict(doc, ['checking_info', 'trip_kind']) in ['work', 'personal']:
                 trip_dict = {
                     'afdeling_naam': get_from_dict(doc, ['department', 'name']),
                     'afdeling_id': get_from_dict(doc, ['department', 'id']),
