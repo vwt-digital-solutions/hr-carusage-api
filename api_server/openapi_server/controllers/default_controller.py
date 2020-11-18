@@ -26,15 +26,25 @@ def export_trips(ended_after, ended_before):  # noqa: E501
     :rtype: blob
     """
 
-    # Check which user is logged in
-    user = g.user
-    if not user:
+    if 'user' not in g:  # Check if user is logged in
         return make_response('The user is not authorised to make this request', 401)
-
-    # First update the frequent offenders collection on Firestore
 
     db_client = firestore.Client()
 
+    # First update the frequent offenders collection on Firestore
+    fq_response, frequent_offenders = update_frequent_offenders(db_client)
+    if fq_response is not None:
+        return fq_response
+
+    # Export all trips after and before an end date if they have been checked already
+    et_response = export_all_trips(db_client, ended_after, ended_before, frequent_offenders)
+    if et_response is not None:
+        return et_response
+
+    return make_response(jsonify([]), 204)
+
+
+def update_frequent_offenders(db_client):
     query_fs_upate = db_client.collection(config.COLLECTION_NAME)
 
     # Get last sunday
@@ -57,7 +67,7 @@ def export_trips(ended_after, ended_before):  # noqa: E501
         every_trip_checkt = True
         for doc in docs_fs_update:
             if get_from_dict(doc, ['checking_info', 'checked']) is True or \
-               get_from_dict(doc, ['checking_info', 'checked']) is False:
+                    get_from_dict(doc, ['checking_info', 'checked']) is False:
                 offender_dict = {
                     'department_name': get_from_dict(doc, ['department', 'name']),
                     'department_id': get_from_dict(doc, ['department', 'id']),
@@ -80,12 +90,14 @@ def export_trips(ended_after, ended_before):  # noqa: E501
             frequent_offenders = get_frequent_offenders(response_fs_update)
             update_collection_response = update_frequent_offenders_collection(frequent_offenders, eight_weeks_mon)
             if update_collection_response is False:
-                return make_response("Firestore could not be updated with frequent offenders", 500)
+                return make_response("Firestore could not be updated with frequent offenders", 500), None
         else:
-            return make_response("Not every trip is checked yet", 409)
+            return make_response("Not every trip is checked yet", 409), None
 
-    # Then export all trips after and before an end date if they have been checked already
+    return None, frequent_offenders
 
+
+def export_all_trips(db_client, ended_after, ended_before, frequent_offenders):
     query_export = db_client.collection(config.COLLECTION_NAME)
 
     query_export = query_export.where('ended_at', '>=', datetime.strptime(ended_after, "%Y-%m-%dT%H:%M:%SZ"))
@@ -100,7 +112,7 @@ def export_trips(ended_after, ended_before):  # noqa: E501
         every_trip_checkt = True
         for doc in docs_export:
             if get_from_dict(doc, ['checking_info', 'checked']) is True or \
-               get_from_dict(doc, ['checking_info', 'checked']) is False:
+                    get_from_dict(doc, ['checking_info', 'checked']) is False:
                 trip_dict = {
                     'afdeling_naam': get_from_dict(doc, ['department', 'name']),
                     'afdeling_id': get_from_dict(doc, ['department', 'id']),
@@ -133,7 +145,7 @@ def export_trips(ended_after, ended_before):  # noqa: E501
         else:
             return make_response("Not every trip is checked yet", 409)
 
-    return make_response(jsonify([]), 204)
+    return None
 
 
 def get_frequent_offenders(results):
@@ -305,38 +317,37 @@ def update_trips_collection(response_licenses, ended_after, ended_before):
                 doc_dict = doc.to_dict()
 
                 doc_license = doc_dict.get('license')
-                if doc_license:
-                    # Check if the license is in export info
-                    if doc_license in response_licenses:
-                        # Get time in utc
-                        time_now = datetime.utcnow()
-                        # Check which user is logged in
-                        user = g.user
-                        if not user:
-                            return make_response('The user is not authorised to make this request', 401)
-                        # Update the entity
-                        field = {
-                            "exported": {
-                                "exported_at": time_now,
-                                "exported_by": user
-                            }
-                        }
-                        batch.update(doc.reference, field)
-                        # Add doc to list of exported entities
-                        doc_dict = doc.to_dict()
-                        doc_dict['started_at'] = doc_dict['started_at'].isoformat()
-                        doc_dict['ended_at'] = doc_dict['ended_at'].isoformat()
-                        export_field_dict = {
-                            "exported": {
-                                "exported_at": time_now.isoformat(),
-                                "exported_by": user
-                            }
-                        }
-                        doc_dict.update(export_field_dict)
-                        for loc in doc_dict['locations']:
-                            loc['when'] = loc['when'].isoformat()
-                        exported_docs.append(doc_dict)
-                        update_batch = True
+
+                if not doc_license or doc_license not in response_licenses:  # Check if the license is in export info
+                    continue
+
+                time_now = datetime.utcnow()  # Get time in utc
+
+                # Update the entity
+                field = {
+                    "exported": {
+                        "exported_at": time_now,
+                        "exported_by": g.user
+                    }
+                }
+                batch.update(doc.reference, field)
+
+                # Add doc to list of exported entities
+                doc_dict['started_at'] = doc_dict['started_at'].isoformat()
+                doc_dict['ended_at'] = doc_dict['ended_at'].isoformat()
+                export_field_dict = {
+                    "exported": {
+                        "exported_at": time_now.isoformat(),
+                        "exported_by": g.user
+                    }
+                }
+                doc_dict.update(export_field_dict)
+
+                for loc in doc_dict['locations']:
+                    loc['when'] = loc['when'].isoformat()
+
+                exported_docs.append(doc_dict)
+                update_batch = True
             if update_batch is True:
                 batch.commit()  # Committing changes within batch
         else:
