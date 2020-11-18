@@ -215,7 +215,7 @@ def get_frequent_offenders(results):
     return frequent_offenders
 
 
-def update_frequent_offenders_collection(frequent_offenders, ended_after):
+def update_frequent_offenders_collection(frequent_offenders, ended_after):  # noqa: C901
     batch_limit = 500
     batch_has_new_entities = True
     batch_last_reference = None
