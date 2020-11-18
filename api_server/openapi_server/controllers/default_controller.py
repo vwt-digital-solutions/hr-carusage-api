@@ -27,7 +27,9 @@ def export_trips(ended_after, ended_before):  # noqa: E501
     """
 
     if 'user' not in g:  # Check if user is logged in
-        return make_response('The user is not authorised to make this request', 401)
+        return make_response(
+            {"detail": "The user is not authorised to make this request", "status": 401, "title": "Unauthorized",
+             "type": "about:blank"}, 401)
 
     db_client = firestore.Client()
 
@@ -90,9 +92,13 @@ def update_frequent_offenders(db_client):
             frequent_offenders = get_frequent_offenders(response_fs_update)
             update_collection_response = update_frequent_offenders_collection(frequent_offenders, eight_weeks_mon)
             if update_collection_response is False:
-                return make_response("Firestore could not be updated with frequent offenders", 500), None
+                return make_response(
+                    {"detail": "Firestore could not be updated with frequent offenders", "status": 500,
+                     "title": "Internal Server Error", "type": "about:blank"}, 500), None
         else:
-            return make_response("Not every trip is checked yet", 409), None
+            return make_response(
+                {"detail": "Not every trip is checked yet", "status": 409, "title": "Conflict",
+                 "type": "about:blank"}, 409), None
 
     return None, frequent_offenders
 
@@ -135,7 +141,9 @@ def export_all_trips(db_client, ended_after, ended_before, frequent_offenders):
             # Update trips database with export information
             exported_entities = update_trips_collection(response_licenses, ended_after, ended_before)
             if not exported_entities:
-                return make_response("Firestore could not be updated with frequent offenders", 500)
+                return make_response(
+                    {"detail": "Firestore could not be updated with frequent offenders", "status": 500,
+                     "title": "Internal Server Error", "type": "about:blank"}, 500)
             # Send trips to topic
             # TODO: uncomment below
             # trips_to_topic_response = exported_trips_to_topic(exported_entities)
@@ -143,7 +151,9 @@ def export_all_trips(db_client, ended_after, ended_before, frequent_offenders):
             #     return make_response("Exported trips could not be send to topic", 500)
             return ContentResponse().create_content_response(response_export, frequent_offenders, request.content_type)
         else:
-            return make_response("Not every trip is checked yet", 409)
+            return make_response(
+                {"detail": "Not every trip is checked yet", "status": 409, "title": "Conflict",
+                 "type": "about:blank"}, 409)
 
     return None
 
@@ -161,7 +171,9 @@ def get_frequent_offenders(results):
             if result.get("license") not in licenses:
                 licenses.append(result.get("license"))
     else:
-        return make_response("Response is missing", 500)
+        return make_response(
+            {"detail": "Response is missing", "status": 500, "title": "Internal Server Error",
+             "type": "about:blank"}, 500)
 
     frequent_offenders = {}
     # For offenders in this period
@@ -507,7 +519,9 @@ class ContentResponse(object):
             return response
         except Exception as e:
             logging.info(f"Generating XLSX file failed: {str(e)}")
-            return make_response('Something went wrong during the generation of a XLSX file', 400)
+            return make_response(
+                {"detail": "Something went wrong during the generation of a XLSX file", "status": 400,
+                 "title": "Bad Request", "type": "about:blank"}, 400)
 
     def create_content_response(self, response_sheet1, response_sheet2, content_type):
         """Creates a response based on the request's content-type"""
@@ -515,4 +529,6 @@ class ContentResponse(object):
         if content_type == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':  # XLSX
             return self.response_xlsx(response_sheet1, response_sheet2)
 
-        return make_response('Something went wrong during the generation of a XLSX file', 400)  # JSON
+        return make_response(
+            {"detail": f"The content-type '{content_type}' is not supported", "status": 400, "title": "Bad Request",
+             "type": "about:blank"}, 400)
