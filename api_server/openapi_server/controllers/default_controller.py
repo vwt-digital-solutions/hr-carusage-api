@@ -160,11 +160,11 @@ def get_frequent_offenders(results):
         if count >= 3:
             for trip in trip_info_dicts[car_license]:
                 trip_info = {
-                        "ended_at": trip.get("ended_at"),
-                        "started_at": trip.get("started_at"),
-                        "trip_kind": trip.get("trip_kind"),
-                        "trip_description": trip.get("trip_description")
-                    }
+                    "ended_at": trip.get("ended_at"),
+                    "started_at": trip.get("started_at"),
+                    "trip_kind": trip.get("trip_kind"),
+                    "trip_description": trip.get("trip_description")
+                }
                 # If the name is not yet in frequent offenders
                 if car_license not in frequent_offenders:
                     offender_info = {
@@ -380,14 +380,13 @@ def to_topic(batch):
             lambda x: logging.debug(f"Published {len(batch)} exported trips"))
         return True
     except Exception as e:
-        logging.exception('Unable to publish exported trips ' +
-                          'to topic because of {}'.format(e))
+        logging.exception(f"Unable to publish exported trips to topic because of {str(e)}")
     return False
 
 
 def chunks(the_list, n):
     n = max(1, n)
-    return (the_list[i:i+n] for i in range(0, len(the_list), n))
+    return (the_list[i:i + n] for i in range(0, len(the_list), n))
 
 
 def get_from_dict(data_dict, map_list):
