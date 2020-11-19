@@ -150,7 +150,7 @@ def export_all_trips(db_client, ended_after, ended_before, frequent_offenders):
                 return make_response(
                     {"detail": "Exported trips could not be send to topic", "status": 500,
                      "title": "Internal Server Error", "type": "about:blank"}, 500)
-            return ContentResponse().create_content_response(response_export, frequent_offenders, request.content_type)
+            return ContentResponse().create_content_response_freq_offenders(response_export, frequent_offenders, request.content_type)
         else:
             return make_response(
                 {"detail": "Not every trip is checked yet", "status": 409, "title": "Conflict",
@@ -409,6 +409,72 @@ def to_topic(batch):
     return False
 
 
+def check_open_trips(ended_after, ended_before):
+    """Result is a list of open trips
+
+    :param ended_after: Filter for trips that ended after a specific date
+    :type ended_after: string
+    :param ended_before: Filter for trips that ended before a specific date
+    :type ended_before: string
+
+    :rtype: blob
+    """
+
+    if 'user' not in g:  # Check if user is logged in
+        return make_response(
+            {"detail": "The user is not authorised to make this request", "status": 401, "title": "Unauthorized",
+                "type": "about:blank"}, 401)
+
+    db_client = firestore.Client()
+
+    # Get the open trips
+    open_trips_response = get_open_trips(db_client, ended_after, ended_before)
+    return open_trips_response
+
+
+def get_open_trips(db_client, ended_after, ended_before):
+    query_trips = db_client.collection(config.COLLECTION_NAME)
+
+    query_trips = query_trips.where('ended_at', '>=', datetime.strptime(ended_after, "%Y-%m-%dT%H:%M:%SZ"))
+    query_trips = query_trips.where('ended_at', '<=', datetime.strptime(ended_before, "%Y-%m-%dT%H:%M:%SZ"))
+    query_trips = query_trips.where('outside_time_window', '==', True)
+    query_trips = query_trips.where('department.manager_mail', '==', g.user)
+
+    docs_trips = query_trips.stream()
+
+    if docs_trips:
+        response_open_trips = []
+        for doc in docs_trips:
+            if not get_from_dict(doc, ['checking_info', 'trip_kind']) in ['work', 'personal']:
+                trip_dict = {
+                    'afdeling_naam': get_from_dict(doc, ['department', 'name']),
+                    'afdeling_id': get_from_dict(doc, ['department', 'id']),
+                    'eindigde_op': get_from_dict(doc, ['ended_at']),
+                    'functie_naam': get_from_dict(doc, ['driver_info', 'function_name']),
+                    'voornaam': get_from_dict(doc, ['driver_info', 'initial']),
+                    'achternaam': get_from_dict(doc, ['driver_info', 'last_name']),
+                    'kenteken': get_from_dict(doc, ['license']),
+                    'initialen': get_from_dict(doc, ['driver_info', 'prefix']),
+                    'begon_op': get_from_dict(doc, ['started_at']),
+                    'trip_soort': get_from_dict(doc, ['checking_info', 'trip_kind']),
+                    'trip_beschrijving': get_from_dict(doc, ['checking_info', 'description'])
+                }
+                response_open_trips.append(trip_dict)
+
+        # If there are open trips
+        if response_open_trips:
+            return ContentResponse().create_content_response(response_open_trips, request.content_type)
+        else:
+            # If there are no open trips
+            return make_response(
+                {"detail": "There are no open trips under this manager", "status": 204, "title": "No Content",
+                    "type": "about:blank"}, 204)
+
+    return make_response(
+        {"detail": "Open trips could not be given", "status": 500, "title": "Internal Server Error",
+            "type": "about:blank"}, 500)
+
+
 def chunks(the_list, n):
     n = max(1, n)
     return (the_list[i:i + n] for i in range(0, len(the_list), n))
@@ -498,7 +564,7 @@ class ContentResponse(object):
 
         return df
 
-    def response_xlsx(self, response_sheet1, response_sheet2):
+    def response_xlsx_freq_offenders(self, response_sheet1, response_sheet2):
         """Returns the data as a XLSX file"""
 
         timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
@@ -525,11 +591,44 @@ class ContentResponse(object):
                 {"detail": "Something went wrong during the generation of a XLSX file", "status": 400,
                  "title": "Bad Request", "type": "about:blank"}, 400)
 
-    def create_content_response(self, response_sheet1, response_sheet2, content_type):
+    def response_xlsx(self, response_sheet1):
+        """Returns the data as a XLSX file"""
+
+        timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        try:
+            output = io.BytesIO()
+            writer = pd.ExcelWriter(output, engine='xlsxwriter')
+
+            df1 = self.create_dataframe_trips(response_sheet1)
+            df1.to_excel(writer, sheet_name=config.COLLECTION_NAME, index=False)
+
+            writer.save()
+
+            response = make_response(output.getvalue())
+            response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            response.headers['Content-Disposition'] = f"attachment; filename={config.COLLECTION_NAME}_open_{timestamp}.xlsx"
+            return response
+        except Exception as e:
+            logging.info(f"Generating XLSX file failed: {str(e)}")
+            return make_response(
+                {"detail": "Something went wrong during the generation of a XLSX file", "status": 400,
+                 "title": "Bad Request", "type": "about:blank"}, 400)
+
+    def create_content_response_freq_offenders(self, response_sheet1, response_sheet2, content_type):
         """Creates a response based on the request's content-type"""
         # Give response
         if content_type == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':  # XLSX
-            return self.response_xlsx(response_sheet1, response_sheet2)
+            return self.response_xlsx_freq_offenders(response_sheet1, response_sheet2)
+
+        return make_response(
+            {"detail": f"The content-type '{content_type}' is not supported", "status": 400, "title": "Bad Request",
+             "type": "about:blank"}, 400)
+
+    def create_content_response(self, response_sheet1, content_type):
+        """Creates a response based on the request's content-type"""
+        # Give response
+        if content_type == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':  # XLSX
+            return self.response_xlsx(response_sheet1)
 
         return make_response(
             {"detail": f"The content-type '{content_type}' is not supported", "status": 400, "title": "Bad Request",
