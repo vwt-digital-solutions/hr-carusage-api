@@ -134,8 +134,8 @@ def patch_trip(trip, car_license_hash, file_name_locations):
             when = location['when']
             when_datetime = datetime.datetime.strptime(when, "%Y-%m-%dT%H:%M:%S")
             location['when'] = when_datetime
-            # While location is not stationary
-            while location['what'] != "Stationary":
+            # While location is not stationary and is not an external power change
+            while location['what'] != "Stationary" and location['what'] != "ExternalPowerChange":
                 # Keep adding the location to a trip
                 add_to_trip.append(location)
                 if i - 1 < 0:
@@ -194,8 +194,14 @@ def patch_trips(car_trips, file_name_locations):
                     if loc - 1 >= 0:
                         # If the current location is stationary and the last location
                         # is stationary as well
-                        if car['trips'][t][loc-1]['what'] == 'Stationary' and \
-                           car['trips'][t][loc]['what'] == 'Stationary':
+                        if (car['trips'][t][loc-1]['what'] == 'Stationary' and
+                           car['trips'][t][loc]['what'] == 'Stationary') or \
+                           (car['trips'][t][loc-1]['what'] == 'Stationary' and
+                           car['trips'][t][loc]['what'] == 'ExternalPowerChange') or \
+                           (car['trips'][t][loc-1]['what'] == 'ExternalPowerChange' and
+                           car['trips'][t][loc]['what'] == 'Stationary') or \
+                           (car['trips'][t][loc-1]['what'] == 'ExternalPowerChange' and
+                           car['trips'][t][loc]['what'] == 'ExternalPowerChange'):
                             # Remove the last stationary location
                             to_rem_loc.append(loc-1)
                 # Only add locations that did not have to be removed
