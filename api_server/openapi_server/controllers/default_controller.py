@@ -8,7 +8,7 @@ from google.cloud import pubsub_v1
 import json
 
 from functools import reduce
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from flask import request, jsonify, make_response, g
 from google.cloud import firestore
 
@@ -145,10 +145,11 @@ def export_all_trips(db_client, ended_after, ended_before, frequent_offenders):
                     {"detail": "Firestore could not be updated with frequent offenders", "status": 500,
                      "title": "Internal Server Error", "type": "about:blank"}, 500)
             # Send trips to topic
-            # TODO: uncomment below
-            # trips_to_topic_response = exported_trips_to_topic(exported_entities)
-            # if trips_to_topic_response is False:
-            #     return make_response("Exported trips could not be send to topic", 500)
+            trips_to_topic_response = exported_trips_to_topic(exported_entities)
+            if trips_to_topic_response is False:
+                return make_response(
+                    {"detail": "Exported trips could not be send to topic", "status": 500,
+                     "title": "Internal Server Error", "type": "about:blank"}, 500)
             return ContentResponse().create_content_response(response_export, frequent_offenders, request.content_type)
         else:
             return make_response(
@@ -259,6 +260,8 @@ def update_frequent_offenders_collection(frequent_offenders, ended_after):  # no
                         for trip in car_license_freq_off['trips']:
                             # If trip is not already in the trips of the Firestore entity
                             # and the trip has an end date after a certain date
+                            # Make ended_after context aware
+                            ended_after = ended_after.replace(tzinfo=timezone.utc)
                             if trip not in trips and trip['ended_at'] > ended_after:
                                 # Add trip to trips
                                 trips.append(trip)
@@ -308,6 +311,7 @@ def update_trips_collection(response_licenses, ended_after, ended_before):
         query = query.where('ended_at', '>=', datetime.strptime(ended_after, "%Y-%m-%dT%H:%M:%SZ"))
         query = query.where('ended_at', '<=', datetime.strptime(ended_before, "%Y-%m-%dT%H:%M:%SZ"))
         query = query.where('outside_time_window', '==', True)
+        query = query.where('department.manager_mail', '==', g.user)
         query = query.order_by("ended_at", direction="ASCENDING")
 
         if batch_last_reference:
@@ -376,7 +380,6 @@ def exported_trips_to_topic(response):
         topic_response = to_topic(trip_batch)
         if topic_response is False:
             return False
-        break
     return True
 
 
@@ -395,7 +398,6 @@ def to_topic(batch):
             "gobits": [gobits.to_json()],
             "trips": batch
         }
-        logging.info(msg)
         # print(json.dumps(msg, indent=4, sort_keys=True))
         future = publisher.publish(
             topic_path, bytes(json.dumps(msg).encode('utf-8')))
