@@ -56,7 +56,7 @@ paths:
         - oauth2: [carusage.read]
   /check/open-trips:
     get:
-      description: Returns a list of all car trips that have not been checked yet
+      description: Returns a list of all car trips that have not been exported yet
       operationId: check_open_trips
       parameters:
         - $ref: '#/components/parameters/filterEndedAfterParam'
@@ -69,7 +69,7 @@ paths:
                 $ref: '#/components/schemas/TripsResponseFile'
           description: Returns a list of car trips
         "204":
-          description: There are no open trips under this manager
+          description: There are no open trips under
         "400":
           content:
             application/problem+json:

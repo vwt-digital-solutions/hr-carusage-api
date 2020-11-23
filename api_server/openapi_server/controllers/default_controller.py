@@ -420,11 +420,6 @@ def check_open_trips(ended_after, ended_before):
     :rtype: blob
     """
 
-    if 'user' not in g:  # Check if user is logged in
-        return make_response(
-            {"detail": "The user is not authorised to make this request", "status": 401, "title": "Unauthorized",
-                "type": "about:blank"}, 401)
-
     db_client = firestore.Client()
 
     # Get the open trips
@@ -438,14 +433,13 @@ def get_open_trips(db_client, ended_after, ended_before):
     query_trips = query_trips.where('ended_at', '>=', datetime.strptime(ended_after, "%Y-%m-%dT%H:%M:%SZ"))
     query_trips = query_trips.where('ended_at', '<=', datetime.strptime(ended_before, "%Y-%m-%dT%H:%M:%SZ"))
     query_trips = query_trips.where('outside_time_window', '==', True)
-    query_trips = query_trips.where('department.manager_mail', '==', g.user)
 
     docs_trips = query_trips.stream()
 
     if docs_trips:
         response_open_trips = []
         for doc in docs_trips:
-            if not get_from_dict(doc, ['checking_info', 'trip_kind']) in ['work', 'personal']:
+            if not get_from_dict(doc, ['exported', 'exported_at']):
                 trip_dict = {
                     'afdeling_naam': get_from_dict(doc, ['department', 'name']),
                     'afdeling_id': get_from_dict(doc, ['department', 'id']),
@@ -464,15 +458,10 @@ def get_open_trips(db_client, ended_after, ended_before):
         # If there are open trips
         if response_open_trips:
             return ContentResponse().create_content_response(response_open_trips, request.content_type)
-        else:
-            # If there are no open trips
-            return make_response(
-                {"detail": "There are no open trips under this manager", "status": 204, "title": "No Content",
-                    "type": "about:blank"}, 204)
 
     return make_response(
-        {"detail": "Open trips could not be given", "status": 500, "title": "Internal Server Error",
-            "type": "about:blank"}, 500)
+        {"detail": "There are no open trips", "status": 204, "title": "No Content",
+         "type": "about:blank"}, 204)
 
 
 def chunks(the_list, n):
