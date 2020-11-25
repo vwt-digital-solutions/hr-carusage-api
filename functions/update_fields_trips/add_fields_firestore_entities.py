@@ -130,7 +130,8 @@ class AddFieldsToFirestoreEntities(object):
 
     def add_fields_to_collection(self):
         if not self.trip_information['drivers']:
-            raise FileNotFoundError('No driver information found')
+            logging.info('No driver information found, aborting execution')
+            return
 
         trips_in_time_window, sample_amount = self.mark_trips_time_window()  # Mark trips based on time window
 
