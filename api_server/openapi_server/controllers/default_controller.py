@@ -48,6 +48,7 @@ def export_trips(ended_after, ended_before):  # noqa: E501
 
 def update_frequent_offenders(db_client):
     query_fs_upate = db_client.collection(config.COLLECTION_NAME)
+    frequent_offenders = None
 
     # Get last sunday
     today = datetime.utcnow()
@@ -69,7 +70,9 @@ def update_frequent_offenders(db_client):
         response_fs_update = []
         every_trip_checkt = True
         for doc in docs_fs_update:
-            if get_from_dict(doc, ['checking_info', 'trip_kind']) in ['work', 'personal']:
+            if get_from_dict(doc, ['exported', 'exported_at']):
+                continue
+            elif get_from_dict(doc, ['checking_info', 'trip_kind']) in ['work', 'personal']:
                 offender_dict = {
                     'department_name': get_from_dict(doc, ['department', 'name']),
                     'department_id': get_from_dict(doc, ['department', 'id']),
@@ -89,12 +92,13 @@ def update_frequent_offenders(db_client):
 
         if every_trip_checkt is True:
             # Count frequent offenders and update database
-            frequent_offenders = get_frequent_offenders(response_fs_update)
-            update_collection_response = update_frequent_offenders_collection(frequent_offenders, eight_weeks_mon)
-            if update_collection_response is False:
-                return make_response(
-                    {"detail": "Firestore could not be updated with frequent offenders", "status": 500,
-                     "title": "Internal Server Error", "type": "about:blank"}, 500), None
+            if len(response_fs_update) > 0:
+                frequent_offenders = get_frequent_offenders(response_fs_update)
+                update_collection_response = update_frequent_offenders_collection(frequent_offenders, eight_weeks_mon)
+                if update_collection_response is False:
+                    return make_response(
+                        {"detail": "Firestore could not be updated with frequent offenders", "status": 500,
+                         "title": "Internal Server Error", "type": "about:blank"}, 500), None
         else:
             return make_response(
                 {"detail": "Not every trip is checked yet", "status": 409, "title": "Conflict",
@@ -118,7 +122,9 @@ def export_all_trips(db_client, ended_after, ended_before, frequent_offenders):
         response_licenses = []
         every_trip_checkt = True
         for doc in docs_export:
-            if get_from_dict(doc, ['checking_info', 'trip_kind']) in ['work', 'personal']:
+            if get_from_dict(doc, ['exported', 'exported_at']):
+                continue
+            elif get_from_dict(doc, ['checking_info', 'trip_kind']) in ['work', 'personal']:
                 trip_dict = {
                     'afdeling_naam': get_from_dict(doc, ['department', 'name']),
                     'afdeling_id': get_from_dict(doc, ['department', 'id']),
@@ -138,19 +144,20 @@ def export_all_trips(db_client, ended_after, ended_before, frequent_offenders):
                 every_trip_checkt = False
 
         if every_trip_checkt is True:
-            # Update trips database with export information
-            exported_entities = update_trips_collection(response_licenses, ended_after, ended_before)
-            if not exported_entities:
-                return make_response(
-                    {"detail": "Firestore could not be updated with frequent offenders", "status": 500,
-                     "title": "Internal Server Error", "type": "about:blank"}, 500)
-            # Send trips to topic
-            trips_to_topic_response = exported_trips_to_topic(exported_entities)
-            if trips_to_topic_response is False:
-                return make_response(
-                    {"detail": "Exported trips could not be send to topic", "status": 500,
-                     "title": "Internal Server Error", "type": "about:blank"}, 500)
-            return ContentResponse().create_content_response_freq_offenders(response_export, frequent_offenders, request.content_type)
+            if len(response_export) > 0:
+                # Update trips database with export information
+                exported_entities = update_trips_collection(response_licenses, ended_after, ended_before)
+                if not exported_entities:
+                    return make_response(
+                        {"detail": "Firestore could not be updated with frequent offenders", "status": 500,
+                         "title": "Internal Server Error", "type": "about:blank"}, 500)
+                # Send trips to topic
+                trips_to_topic_response = exported_trips_to_topic(exported_entities)
+                if trips_to_topic_response is False:
+                    return make_response(
+                        {"detail": "Exported trips could not be send to topic", "status": 500,
+                         "title": "Internal Server Error", "type": "about:blank"}, 500)
+                return ContentResponse().create_content_response_freq_offenders(response_export, frequent_offenders, request.content_type)
         else:
             return make_response(
                 {"detail": "Not every trip is checked yet", "status": 409, "title": "Conflict",
