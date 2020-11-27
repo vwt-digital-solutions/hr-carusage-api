@@ -68,7 +68,7 @@ def convert_to_datetime(string):
         pass
         return None
     else:
-        return value
+        return value.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 class STGProcessor(object):
