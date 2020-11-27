@@ -74,14 +74,13 @@ def update_frequent_offenders(db_client):
                 continue
             elif get_from_dict(doc, ['checking_info', 'trip_kind']) in ['work', 'personal']:
                 offender_dict = {
-                    'department_name': get_from_dict(doc, ['department', 'name']),
-                    'department_id': get_from_dict(doc, ['department', 'id']),
+                    'department_name': get_from_dict(doc, ['department', 'department_name']),
+                    'department_id': get_from_dict(doc, ['department', 'department_id']),
                     'ended_at': get_from_dict(doc, ['ended_at']),
-                    'function_name': get_from_dict(doc, ['driver_info', 'function_name']),
-                    'initial': get_from_dict(doc, ['driver_info', 'initial']),
-                    'last_name': get_from_dict(doc, ['driver_info', 'last_name']),
+                    'initial': get_from_dict(doc, ['driver_info', 'driver_initials_name']),
+                    'last_name': get_from_dict(doc, ['driver_info', 'driver_last_name']),
                     'license': get_from_dict(doc, ['license']),
-                    'prefix': get_from_dict(doc, ['driver_info', 'prefix']),
+                    'prefix': get_from_dict(doc, ['driver_info', 'driver_prefix_name']),
                     'started_at': get_from_dict(doc, ['started_at']),
                     'trip_kind': get_from_dict(doc, ['checking_info', 'trip_kind']),
                     'trip_description': get_from_dict(doc, ['checking_info', 'description'])
@@ -125,18 +124,18 @@ def export_all_trips(db_client, ended_after, ended_before, frequent_offenders):
             if get_from_dict(doc, ['exported', 'exported_at']):
                 continue
             elif get_from_dict(doc, ['checking_info', 'trip_kind']) in ['work', 'personal']:
+                trip_kind = get_from_dict(doc, ['checking_info', 'trip_kind'])
+
                 trip_dict = {
-                    'afdeling_naam': get_from_dict(doc, ['department', 'name']),
-                    'afdeling_id': get_from_dict(doc, ['department', 'id']),
-                    'eindigde_op': get_from_dict(doc, ['ended_at']),
-                    'functie_naam': get_from_dict(doc, ['driver_info', 'function_name']),
-                    'voornaam': get_from_dict(doc, ['driver_info', 'initial']),
-                    'achternaam': get_from_dict(doc, ['driver_info', 'last_name']),
                     'kenteken': get_from_dict(doc, ['license']),
-                    'initialen': get_from_dict(doc, ['driver_info', 'prefix']),
                     'begon_op': get_from_dict(doc, ['started_at']),
-                    'trip_soort': get_from_dict(doc, ['checking_info', 'trip_kind']),
-                    'trip_beschrijving': get_from_dict(doc, ['checking_info', 'description'])
+                    'eindigde_op': get_from_dict(doc, ['ended_at']),
+                    'voornaam': get_from_dict(doc, ['driver_info', 'driver_first_name']),
+                    'achternaam': get_from_dict(doc, ['driver_info', 'driver_last_name']),
+                    'afdeling_naam': get_from_dict(doc, ['department', 'department_name']),
+                    'afdeling_nummer': get_from_dict(doc, ['department', 'department_id']),
+                    'rit_soort': 'werk' if trip_kind == 'work' else ('privé' if trip_kind == 'personal' else None),
+                    'rit_beschrijving': get_from_dict(doc, ['checking_info', 'description'])
                 }
                 response_export.append(trip_dict)
                 response_licenses.append(get_from_dict(doc, ['license']))
@@ -202,11 +201,10 @@ def get_frequent_offenders(results):
                     offender_info = {
                         "department_name": trip.get("department_name"),
                         "department_id": trip.get("department_id"),
-                        "function_name": trip.get("function_name"),
-                        "initial": trip.get("initial"),
-                        "last_name": trip.get("last_name"),
+                        "initial": trip.get("driver_initial_name"),
+                        "last_name": trip.get("driver_last_name"),
                         "license": car_license,
-                        "prefix": trip.get("prefix")
+                        "prefix": trip.get("driver_prefix_name")
                     }
                     frequent_offender = {
                         car_license: {
@@ -447,18 +445,18 @@ def get_open_trips(db_client, ended_after, ended_before):
         response_open_trips = []
         for doc in docs_trips:
             if not get_from_dict(doc, ['exported', 'exported_at']):
+                trip_kind = get_from_dict(doc, ['checking_info', 'trip_kind'])
+
                 trip_dict = {
-                    'afdeling_naam': get_from_dict(doc, ['department', 'name']),
-                    'afdeling_id': get_from_dict(doc, ['department', 'id']),
-                    'eindigde_op': get_from_dict(doc, ['ended_at']),
-                    'functie_naam': get_from_dict(doc, ['driver_info', 'function_name']),
-                    'voornaam': get_from_dict(doc, ['driver_info', 'initial']),
-                    'achternaam': get_from_dict(doc, ['driver_info', 'last_name']),
                     'kenteken': get_from_dict(doc, ['license']),
-                    'initialen': get_from_dict(doc, ['driver_info', 'prefix']),
                     'begon_op': get_from_dict(doc, ['started_at']),
-                    'trip_soort': get_from_dict(doc, ['checking_info', 'trip_kind']),
-                    'trip_beschrijving': get_from_dict(doc, ['checking_info', 'description'])
+                    'eindigde_op': get_from_dict(doc, ['ended_at']),
+                    'voornaam': get_from_dict(doc, ['driver_info', 'driver_first_name']),
+                    'achternaam': get_from_dict(doc, ['driver_info', 'driver_last_name']),
+                    'afdeling_naam': get_from_dict(doc, ['department', 'department_name']),
+                    'afdeling_nummer': get_from_dict(doc, ['department', 'department_id']),
+                    'rit_soort': 'werk' if trip_kind == 'work' else ('privé' if trip_kind == 'personal' else None),
+                    'rit_beschrijving': get_from_dict(doc, ['checking_info', 'description'])
                 }
                 response_open_trips.append(trip_dict)
 
@@ -503,7 +501,6 @@ class ContentResponse(object):
     def create_dataframe_frequent_offenders(content):
         department_names = []
         department_ids = []
-        function_names = []
         initials = []
         last_names = []
         licenses = []
@@ -511,19 +508,17 @@ class ContentResponse(object):
         for car_license in content:
             department_names.append(content[car_license]['offender_info']['department_name'])
             department_ids.append(content[car_license]['offender_info']['department_id'])
-            function_names.append(content[car_license]['offender_info']['function_name'])
-            initials.append(content[car_license]['offender_info']['initial'])
-            last_names.append(content[car_license]['offender_info']['last_name'])
+            initials.append(content[car_license]['offender_info']['driver_initial_name'])
+            last_names.append(content[car_license]['offender_info']['driver_last_name'])
             licenses.append(content[car_license]['offender_info']['license'])
-            prefixes.append(content[car_license]['offender_info']['prefix'])
+            prefixes.append(content[car_license]['offender_info']['driver_prefix_name'])
         content_json = {
             "achternaam": last_names,
             "voornaam": initials,
             "initialen": prefixes,
             "kenteken": licenses,
             "afdeling_naam": department_names,
-            "afdeling_id": department_ids,
-            "functie_naam": function_names
+            "afdeling_id": department_ids
         }
         df = pd.DataFrame(content_json)
 
@@ -539,7 +534,7 @@ class ContentResponse(object):
         trip_descriptions = []
         for car_license in content:
             for trip in content[car_license]['trips']:
-                last_names.append(content[car_license]['offender_info']['last_name'])
+                last_names.append(content[car_license]['offender_info']['driver_last_name'])
                 licenses.append(content[car_license]['offender_info']['license'])
                 ended_ats.append(trip['ended_at'])
                 started_ats.append(trip['started_at'])
