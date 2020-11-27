@@ -54,7 +54,7 @@ def create_object(key, dict):
 def convert_to_int(string):
     try:
         value = int(string)
-    except ValueError:
+    except (ValueError, TypeError):
         pass
         return None
     else:
@@ -64,7 +64,7 @@ def convert_to_int(string):
 def convert_to_datetime(string):
     try:
         value = datetime.strptime(string, "%Y-%m-%dT%H:%M:%SZ")
-    except ValueError:
+    except (ValueError, TypeError):
         pass
         return None
     else:
