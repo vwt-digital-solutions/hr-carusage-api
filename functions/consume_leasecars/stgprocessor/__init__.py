@@ -29,7 +29,7 @@ def process(payload):
         for key in cur_cars:  # Sort drivers on start date
             cur_cars[key] = sorted(cur_cars[key], key=lambda i: i['driver_start_date'], reverse=True)
 
-        # stg_processor.update_file(cur_cars)
+        stg_processor.update_file(cur_cars)
         logging.info(f"Updated {updated_cars} lease cars")
 
 
