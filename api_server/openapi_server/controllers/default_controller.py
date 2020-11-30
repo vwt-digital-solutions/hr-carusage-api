@@ -3,14 +3,13 @@ import io
 import logging
 import operator
 import pandas as pd
-from gobits import Gobits
-from google.cloud import pubsub_v1
-import json
 
 from functools import reduce
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from flask import request, jsonify, make_response, g
 from google.cloud import firestore
+
+from openapi_server.controllers.export_controller import ExportProcessor
 
 logging.basicConfig(level=logging.INFO)
 
@@ -31,387 +30,32 @@ def export_trips(ended_after, ended_before):  # noqa: E501
             {"detail": "The user is not authorised to make this request", "status": 401, "title": "Unauthorized",
              "type": "about:blank"}, 401)
 
-    db_client = firestore.Client()
+    export_processor = ExportProcessor(ended_after, ended_before)
+    trips_to_export, all_trips_marked = export_processor.get_trips_to_export()
 
-    # First update the frequent offenders collection on Firestore
-    fq_response, frequent_offenders = update_frequent_offenders(db_client)
-    if fq_response is not None:
-        return fq_response
+    if not all_trips_marked:
+        return make_response(
+            {"detail": "Not every trip is marked yet", "status": 409, "title": "Conflict", "type": "about:blank"},
+            409), None
 
-    # Export all trips after and before an end date if they have been checked already
-    et_response = export_all_trips(db_client, ended_after, ended_before, frequent_offenders)
-    if et_response is not None:
-        return et_response
+    if len(trips_to_export) > 0:
+        # Retrieve active and existing frequent offenders
+        fo_active, fo_existing, fo_to_update = export_processor.process_frequent_offenders(trips_to_export)
+
+        # Send trips to topic
+        trips_to_topic_response = export_processor.exported_trips_to_topic(trips_to_export)
+        if trips_to_topic_response is False:
+            return make_response(
+                {"detail": "Exported trips could not be send to topic", "status": 400,
+                 "title": "Internal Server Error", "type": "about:blank"}, 400)
+
+        # Update all entities with transaction
+        export_processor.update_entities(fo_existing, fo_to_update, trips_to_export)
+
+        return ContentResponse().create_content_response_freq_offenders(
+            trips_to_export, fo_active, request.content_type)
 
     return make_response(jsonify([]), 204)
-
-
-def update_frequent_offenders(db_client):
-    query_fs_upate = db_client.collection(config.COLLECTION_NAME)
-    frequent_offenders = None
-
-    # Get last sunday
-    today = datetime.utcnow()
-    idx = (today.weekday() + 1) % 7  # MON = 1
-    last_sun = today - timedelta(idx)
-    last_sun = last_sun.replace(hour=23, minute=59, second=59)
-    # Get monday 2 months before that
-    eight_weeks_mon = last_sun - timedelta(55)
-    eight_weeks_mon = eight_weeks_mon.replace(hour=00, minute=00, second=00)
-
-    query_fs_upate = query_fs_upate.where('ended_at', '>=', eight_weeks_mon)
-    query_fs_upate = query_fs_upate.where('ended_at', '<=', last_sun)
-    query_fs_upate = query_fs_upate.where('outside_time_window', '==', True)
-    query_fs_upate = query_fs_upate.where('department.manager_mail', '==', g.user)
-
-    docs_fs_update = query_fs_upate.stream()
-
-    if docs_fs_update:
-        response_fs_update = []
-        every_trip_checkt = True
-        for doc in docs_fs_update:
-            if get_from_dict(doc, ['exported', 'exported_at']):
-                continue
-            elif get_from_dict(doc, ['checking_info', 'trip_kind']) in ['work', 'personal']:
-                offender_dict = {
-                    'department_name': get_from_dict(doc, ['department', 'department_name']),
-                    'department_id': get_from_dict(doc, ['department', 'department_id']),
-                    'ended_at': get_from_dict(doc, ['ended_at']),
-                    'initial': get_from_dict(doc, ['driver_info', 'driver_initials_name']),
-                    'last_name': get_from_dict(doc, ['driver_info', 'driver_last_name']),
-                    'license': get_from_dict(doc, ['license']),
-                    'prefix': get_from_dict(doc, ['driver_info', 'driver_prefix_name']),
-                    'started_at': get_from_dict(doc, ['started_at']),
-                    'trip_kind': get_from_dict(doc, ['checking_info', 'trip_kind']),
-                    'trip_description': get_from_dict(doc, ['checking_info', 'description'])
-                }
-                response_fs_update.append(offender_dict)
-            else:
-                every_trip_checkt = False
-
-        if every_trip_checkt is True:
-            # Count frequent offenders and update database
-            if len(response_fs_update) > 0:
-                frequent_offenders = get_frequent_offenders(response_fs_update)
-                update_collection_response = update_frequent_offenders_collection(frequent_offenders, eight_weeks_mon)
-                if update_collection_response is False:
-                    return make_response(
-                        {"detail": "Firestore could not be updated with frequent offenders", "status": 500,
-                         "title": "Internal Server Error", "type": "about:blank"}, 500), None
-        else:
-            return make_response(
-                {"detail": "Not every trip is checked yet", "status": 409, "title": "Conflict",
-                 "type": "about:blank"}, 409), None
-
-    return None, frequent_offenders
-
-
-def export_all_trips(db_client, ended_after, ended_before, frequent_offenders):
-    query_export = db_client.collection(config.COLLECTION_NAME)
-
-    query_export = query_export.where('ended_at', '>=', datetime.strptime(ended_after, "%Y-%m-%dT%H:%M:%SZ"))
-    query_export = query_export.where('ended_at', '<=', datetime.strptime(ended_before, "%Y-%m-%dT%H:%M:%SZ"))
-    query_export = query_export.where('outside_time_window', '==', True)
-    query_export = query_export.where('department.manager_mail', '==', g.user)
-
-    docs_export = query_export.stream()
-
-    if docs_export:
-        response_export = []
-        response_licenses = []
-        every_trip_checkt = True
-        for doc in docs_export:
-            if get_from_dict(doc, ['exported', 'exported_at']):
-                continue
-            elif get_from_dict(doc, ['checking_info', 'trip_kind']) in ['work', 'personal']:
-                trip_kind = get_from_dict(doc, ['checking_info', 'trip_kind'])
-
-                trip_dict = {
-                    'kenteken': get_from_dict(doc, ['license']),
-                    'begon_op': get_from_dict(doc, ['started_at']),
-                    'eindigde_op': get_from_dict(doc, ['ended_at']),
-                    'voornaam': get_from_dict(doc, ['driver_info', 'driver_first_name']),
-                    'achternaam': get_from_dict(doc, ['driver_info', 'driver_last_name']),
-                    'afdeling_naam': get_from_dict(doc, ['department', 'department_name']),
-                    'afdeling_nummer': get_from_dict(doc, ['department', 'department_id']),
-                    'rit_soort': 'werk' if trip_kind == 'work' else ('privé' if trip_kind == 'personal' else None),
-                    'rit_beschrijving': get_from_dict(doc, ['checking_info', 'description'])
-                }
-                response_export.append(trip_dict)
-                response_licenses.append(get_from_dict(doc, ['license']))
-            else:
-                every_trip_checkt = False
-
-        if every_trip_checkt is True:
-            if len(response_export) > 0:
-                # Update trips database with export information
-                exported_entities = update_trips_collection(response_licenses, ended_after, ended_before)
-                if not exported_entities:
-                    return make_response(
-                        {"detail": "Firestore could not be updated with frequent offenders", "status": 500,
-                         "title": "Internal Server Error", "type": "about:blank"}, 500)
-                # Send trips to topic
-                trips_to_topic_response = exported_trips_to_topic(exported_entities)
-                if trips_to_topic_response is False:
-                    return make_response(
-                        {"detail": "Exported trips could not be send to topic", "status": 500,
-                         "title": "Internal Server Error", "type": "about:blank"}, 500)
-                return ContentResponse().create_content_response_freq_offenders(response_export, frequent_offenders, request.content_type)
-        else:
-            return make_response(
-                {"detail": "Not every trip is checked yet", "status": 409, "title": "Conflict",
-                 "type": "about:blank"}, 409)
-
-    return None
-
-
-def get_frequent_offenders(results):
-    # Get all licenses that were outside of time window
-    licenses = []
-    trip_info_dicts = {}
-    if results:
-        for result in results:
-            if result.get("license") in trip_info_dicts:
-                trip_info_dicts[result.get("license")].append(result)
-            else:
-                trip_info_dicts[result.get("license")] = [result]
-            if result.get("license") not in licenses:
-                licenses.append(result.get("license"))
-    else:
-        return make_response(
-            {"detail": "Response is missing", "status": 500, "title": "Internal Server Error",
-             "type": "about:blank"}, 500)
-
-    frequent_offenders = {}
-    # For offenders in this period
-    for car_license in licenses:
-        # Count how many times in the past three weeks a driver drove outside of the time window
-        count = len(trip_info_dicts[car_license])
-        # If this value is more than or equal to 3, the driver is a frequent offender
-        if count >= 3:
-            for trip in trip_info_dicts[car_license]:
-                trip_info = {
-                    "ended_at": trip.get("ended_at"),
-                    "started_at": trip.get("started_at"),
-                    "trip_kind": trip.get("trip_kind"),
-                    "trip_description": trip.get("trip_description")
-                }
-                # If the name is not yet in frequent offenders
-                if car_license not in frequent_offenders:
-                    offender_info = {
-                        "department_name": trip.get("department_name"),
-                        "department_id": trip.get("department_id"),
-                        "initial": trip.get("driver_initial_name"),
-                        "last_name": trip.get("driver_last_name"),
-                        "license": car_license,
-                        "prefix": trip.get("driver_prefix_name")
-                    }
-                    frequent_offender = {
-                        car_license: {
-                            "offender_info": offender_info,
-                            "trips": [trip_info]
-                        }
-                    }
-                    frequent_offenders.update(frequent_offender)
-                # If it is
-                else:
-                    # Update the trips of the offender
-                    frequent_offenders[car_license]['trips'].append(trip_info)
-
-    return frequent_offenders
-
-
-def update_frequent_offenders_collection(frequent_offenders, ended_after):  # noqa: C901
-    batch_limit = 500
-    batch_has_new_entities = True
-    batch_last_reference = None
-
-    updated_freq_off = []
-
-    # While the batch contains new entries
-    while batch_has_new_entities:
-        # Query
-        db_client = firestore.Client()
-        query = db_client.collection(config.COLLECTION_NAME_FREQ_OFF)
-
-        if batch_last_reference:
-            query = query.start_after(batch_last_reference)
-
-        query = query.limit(batch_limit)
-        docs = query.stream()
-
-        if docs:
-            batch = db_client.batch()  # Creating new batch
-            docs_list = list(docs)
-
-            if len(docs_list) < batch_limit:
-                batch_has_new_entities = False
-
-            update_batch = False
-            for doc in docs_list:
-                batch_last_reference = doc
-                doc_dict = doc.to_dict()
-
-                car_license_collection = doc_dict.get('offender_info').get('license')
-                if car_license_collection:
-                    # Check if car_license is in found frequent offenders
-                    car_license_freq_off = frequent_offenders.get(car_license_collection)
-                    if car_license_freq_off:
-                        # If it is
-                        # Get the current trips where the offender went outside of their time window
-                        trips = doc_dict['trips']
-                        update_trip = False
-                        # Update these trips
-                        for trip in car_license_freq_off['trips']:
-                            # If trip is not already in the trips of the Firestore entity
-                            # and the trip has an end date after a certain date
-                            # Make ended_after context aware
-                            ended_after = ended_after.replace(tzinfo=timezone.utc)
-                            if trip not in trips and trip['ended_at'] > ended_after:
-                                # Add trip to trips
-                                trips.append(trip)
-                                update_trip = True
-                                update_batch = True
-                        if update_trip is True:
-                            # Update the entity
-                            field = {
-                                "trips": trips
-                            }
-                            batch.update(doc.reference, field)
-                        updated_freq_off.append(car_license_collection)
-            if update_batch is True:
-                batch.commit()  # Committing changes within batch
-        else:
-            batch_has_new_entities = False
-
-    # Also update the collection with frequent offenders that were not yet in the collection
-    for offender in frequent_offenders:
-        if offender not in updated_freq_off:
-            # Upload to firestore
-            try:
-                doc_ref = db_client.collection(config.COLLECTION_NAME_FREQ_OFF).document()
-                doc_ref.set(frequent_offenders[offender])
-            except Exception as e:
-                logging.exception(f"Unable to upload frequent offender {frequent_offenders[offender]['offender_info']['license']} "
-                                  f"because of {e}")
-
-    logging.info("Updated the frequent offenders collection in the GCP Firestore")
-
-    return True
-
-
-def update_trips_collection(response_licenses, ended_after, ended_before):
-    batch_limit = 500
-    batch_has_new_entities = True
-    batch_last_reference = None
-
-    exported_docs = []
-
-    # While the batch contains new entries
-    while batch_has_new_entities:
-        # Query
-        db_client = firestore.Client()
-        query = db_client.collection(config.COLLECTION_NAME)
-
-        query = query.where('ended_at', '>=', datetime.strptime(ended_after, "%Y-%m-%dT%H:%M:%SZ"))
-        query = query.where('ended_at', '<=', datetime.strptime(ended_before, "%Y-%m-%dT%H:%M:%SZ"))
-        query = query.where('outside_time_window', '==', True)
-        query = query.where('department.manager_mail', '==', g.user)
-        query = query.order_by("ended_at", direction="ASCENDING")
-
-        if batch_last_reference:
-            query = query.start_after(batch_last_reference)
-
-        query = query.limit(batch_limit)
-        docs = query.stream()
-
-        if docs:
-            batch = db_client.batch()  # Creating new batch
-            docs_list = list(docs)
-
-            if len(docs_list) < batch_limit:
-                batch_has_new_entities = False
-
-            update_batch = False
-            for doc in docs_list:
-                batch_last_reference = doc
-                doc_dict = doc.to_dict()
-
-                doc_license = doc_dict.get('license')
-
-                if not doc_license or doc_license not in response_licenses:  # Check if the license is in export info
-                    continue
-
-                time_now = datetime.utcnow()  # Get time in utc
-
-                # Update the entity
-                field = {
-                    "exported": {
-                        "exported_at": time_now,
-                        "exported_by": g.user
-                    }
-                }
-                batch.update(doc.reference, field)
-
-                # Add doc to list of exported entities
-                doc_dict['started_at'] = doc_dict['started_at'].isoformat()
-                doc_dict['ended_at'] = doc_dict['ended_at'].isoformat()
-                export_field_dict = {
-                    "exported": {
-                        "exported_at": time_now.isoformat(),
-                        "exported_by": g.user
-                    }
-                }
-                doc_dict.update(export_field_dict)
-
-                for loc in doc_dict['locations']:
-                    loc['when'] = loc['when'].isoformat()
-
-                exported_docs.append(doc_dict)
-                update_batch = True
-            if update_batch is True:
-                batch.commit()  # Committing changes within batch
-        else:
-            batch_has_new_entities = False
-
-    logging.info("Updated the trips collection with export info in the GCP Firestore")
-
-    return exported_docs
-
-
-def exported_trips_to_topic(response):
-    trip_batches = chunks(response, 50)
-    for trip_batch in trip_batches:
-        topic_response = to_topic(trip_batch)
-        if topic_response is False:
-            return False
-    return True
-
-
-def to_topic(batch):
-    try:
-        # Get gobits
-        gobits = Gobits()
-        # Project ID where the topic is
-        topic_project_id = config.PROJECT_ID_TOPIC
-        # Topic name
-        topic_name = config.TOPIC_NAME
-        # Publish to topic
-        publisher = pubsub_v1.PublisherClient()
-        topic_path = f"projects/{topic_project_id}/topics/{topic_name}"
-        msg = {
-            "gobits": [gobits.to_json()],
-            "trips": batch
-        }
-        # print(json.dumps(msg, indent=4, sort_keys=True))
-        future = publisher.publish(
-            topic_path, bytes(json.dumps(msg).encode('utf-8')))
-        future.add_done_callback(
-            lambda x: logging.debug(f"Published {len(batch)} exported trips"))
-        return True
-    except Exception as e:
-        logging.exception(f"Unable to publish exported trips to topic because of {str(e)}")
-    return False
 
 
 def check_open_trips(ended_after, ended_before):
@@ -491,7 +135,24 @@ class ContentResponse(object):
 
     @staticmethod
     def create_dataframe_trips(content):
-        df = pd.DataFrame(content)
+        trips = []
+        for trip in content:
+            trip_kind = get_from_dict(trip, ['checking_info', 'trip_kind'])
+
+            trips.append({
+                'kenteken': get_from_dict(trip, ['license']),
+                'begon_op': get_from_dict(trip, ['started_at']),
+                'eindigde_op': get_from_dict(trip, ['ended_at']),
+                'voornaam': get_from_dict(trip, ['driver_info', 'driver_first_name']),
+                'achternaam': get_from_dict(trip, ['driver_info', 'driver_last_name']),
+                "personeelsnummer": get_from_dict(trip, ['driver_info', 'driver_employee_number']),
+                'afdeling_naam': get_from_dict(trip, ['department', 'department_name']),
+                'afdeling_nummer': get_from_dict(trip, ['department', 'department_id']),
+                'rit_soort': 'werk' if trip_kind == 'work' else ('privé' if trip_kind == 'personal' else None),
+                'rit_beschrijving': get_from_dict(trip, ['checking_info', 'description'])
+            })
+
+        df = pd.DataFrame(trips)
         for col in df.select_dtypes(include=['datetimetz']):
             df[col] = df[col].apply(lambda a: a.tz_convert('Europe/Amsterdam').tz_localize(None))
 
@@ -499,57 +160,44 @@ class ContentResponse(object):
 
     @staticmethod
     def create_dataframe_frequent_offenders(content):
-        department_names = []
-        department_ids = []
-        initials = []
-        last_names = []
-        licenses = []
-        prefixes = []
-        for car_license in content:
-            department_names.append(content[car_license]['offender_info']['department_name'])
-            department_ids.append(content[car_license]['offender_info']['department_id'])
-            initials.append(content[car_license]['offender_info']['driver_initial_name'])
-            last_names.append(content[car_license]['offender_info']['driver_last_name'])
-            licenses.append(content[car_license]['offender_info']['license'])
-            prefixes.append(content[car_license]['offender_info']['driver_prefix_name'])
-        content_json = {
-            "achternaam": last_names,
-            "voornaam": initials,
-            "initialen": prefixes,
-            "kenteken": licenses,
-            "afdeling_naam": department_names,
-            "afdeling_id": department_ids
-        }
-        df = pd.DataFrame(content_json)
+        fo_list = []
+        for fo_id in content:
+            fo_list.append({
+                "personeelsnummer": get_from_dict(content[fo_id], ['driver_info', 'driver_employee_number']),
+                "achternaam": get_from_dict(content[fo_id], ['driver_info', 'driver_last_name']),
+                "voornaam": get_from_dict(content[fo_id], ['driver_info', 'driver_first_name']),
+                "afdeling_naam": get_from_dict(content[fo_id], ['department', 'department_name']),
+                "afdeling_nummer": get_from_dict(content[fo_id], ['department', 'department_id']),
+                "aantal_overtredingen": len(get_from_dict(content[fo_id], ['trips']))
+            })
+
+        df = pd.DataFrame(fo_list)
 
         return df
 
     @staticmethod
     def create_dataframe_frequent_offenders_trips(content):
-        last_names = []
-        licenses = []
-        ended_ats = []
-        started_ats = []
-        trip_kinds = []
-        trip_descriptions = []
-        for car_license in content:
-            for trip in content[car_license]['trips']:
-                last_names.append(content[car_license]['offender_info']['driver_last_name'])
-                licenses.append(content[car_license]['offender_info']['license'])
-                ended_ats.append(trip['ended_at'])
-                started_ats.append(trip['started_at'])
-                trip_kinds.append(trip['trip_kind'])
-                trip_descriptions.append(trip['trip_description'])
-        content_json = {
-            "achternaam": last_names,
-            "kenteken": licenses,
-            "begon_op": started_ats,
-            "eindigde_op": ended_ats,
-            "trip_soort": trip_kinds,
-            "trip_beschrijving": trip_descriptions
-        }
+        fo_trips = []
+        for fo_id in content:
+            driver_employee_number = get_from_dict(content[fo_id], ['driver_info', 'driver_employee_number'])
+            driver_last_name = get_from_dict(content[fo_id], ['driver_info', 'driver_last_name'])
+            driver_first_name = get_from_dict(content[fo_id], ['driver_info', 'driver_first_name'])
+            car_license = get_from_dict(content[fo_id], ['license'])
 
-        df = pd.DataFrame(content_json)
+            for trip in content[fo_id]['trips']:
+                trip_kind = get_from_dict(trip, ['trip_kind'])
+                fo_trips.append({
+                    "personeelsnummer": driver_employee_number,
+                    "achternaam": driver_last_name,
+                    "voornaam": driver_first_name,
+                    "kenteken": car_license,
+                    "begon_op": get_from_dict(trip, ['started_at']),
+                    "eindigde_op": get_from_dict(trip, ['ended_at']),
+                    "soort": 'werk' if trip_kind == 'work' else ('privé' if trip_kind == 'personal' else None),
+                    "beschrijving": get_from_dict(trip, ['trip_description'])
+                })
+
+        df = pd.DataFrame(fo_trips)
         for col in df.select_dtypes(include=['datetimetz']):
             df[col] = df[col].apply(lambda a: a.tz_convert('Europe/Amsterdam').tz_localize(None))
 
@@ -564,11 +212,14 @@ class ContentResponse(object):
             writer = pd.ExcelWriter(output, engine='xlsxwriter')
 
             df1 = self.create_dataframe_trips(response_sheet1)
-            df2 = self.create_dataframe_frequent_offenders(response_sheet2)
-            df3 = self.create_dataframe_frequent_offenders_trips(response_sheet2)
-            df1.to_excel(writer, sheet_name=config.COLLECTION_NAME, index=False)
-            df2.to_excel(writer, sheet_name="veelplegers", index=False)
-            df3.to_excel(writer, sheet_name="veelplegers_trips", index=False)
+            df1.to_excel(writer, sheet_name='Ritten', index=False)
+
+            if len(response_sheet2) > 0:
+                df2 = self.create_dataframe_frequent_offenders(response_sheet2)
+                df3 = self.create_dataframe_frequent_offenders_trips(response_sheet2)
+
+                df2.to_excel(writer, sheet_name="Veelplegers", index=False)
+                df3.to_excel(writer, sheet_name="Veelplegers ritten", index=False)
 
             writer.save()
 
