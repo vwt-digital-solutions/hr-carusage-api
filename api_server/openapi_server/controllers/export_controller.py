@@ -189,7 +189,7 @@ class ExportProcessor(object):
         for item in batch:
             batch_item = {}
             for key in item:
-                if key != 'doc_id' or key != 'doc_reference':
+                if key not in ['doc_id', 'doc_reference']:
                     batch_item[key] = item[key]
 
             batch_to_publish.append(batch_item)
