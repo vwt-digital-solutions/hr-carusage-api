@@ -185,11 +185,14 @@ class ExportProcessor(object):
 
     @staticmethod
     def to_topic(batch):
+        batch_to_publish = []
         for item in batch:
-            if 'doc_id' in item:
-                del item['doc_id']
-            if 'doc_reference' in item:
-                del item['doc_reference']
+            batch_item = {}
+            for key in item:
+                if key != 'doc_id' or key != 'doc_reference':
+                    batch_item[key] = item[key]
+
+            batch_to_publish.append(batch_item)
 
         try:
             gobits = Gobits()  # Get gobits
@@ -198,11 +201,11 @@ class ExportProcessor(object):
             topic_path = f"projects/{config.PROJECT_ID_TOPIC}/topics/{config.TOPIC_NAME}"
             msg = {
                 "gobits": [gobits.to_json()],
-                "trips": batch
+                "trips": batch_to_publish
             }
 
             future = publisher.publish(topic_path, bytes(json.dumps(msg).encode('utf-8')))
-            future.add_done_callback(lambda x: logging.debug(f"Published {len(batch)} exported trips"))
+            future.add_done_callback(lambda x: logging.debug(f"Published {len(batch_to_publish)} exported trips"))
         except Exception as e:
             logging.exception(f"Unable to publish exported trips to topic because of {str(e)}")
             return False
