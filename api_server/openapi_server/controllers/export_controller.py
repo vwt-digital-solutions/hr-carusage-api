@@ -236,15 +236,15 @@ def update_in_transaction(transaction, db_client, collection_fo, collection_trip
 
         # Create audit logging for trip
         audit_log = {
-           "attributes_changed": {
-               "exported": {
-                   "new": exported_field["exported"]
-               }
-           },
-           "table_id": trip['doc_id'],
-           "table_name": collection_trips,
-           "timestamp": time_now.isoformat(timespec="seconds") + 'Z',
-           "user": g.user
+            "attributes_changed": {
+                "exported": {
+                    "new": exported_field["exported"]
+                }
+            },
+            "table_id": trip['doc_id'],
+            "table_name": collection_trips,
+            "timestamp": time_now.isoformat(timespec="seconds") + 'Z',
+            "user": g.user
         }
         doc_ref = db_client.collection(collection_audit).document()
         transaction.create(doc_ref, audit_log)
