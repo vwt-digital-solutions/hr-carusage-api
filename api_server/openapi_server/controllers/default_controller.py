@@ -35,8 +35,8 @@ def export_trips(ended_after, ended_before):  # noqa: E501
 
     if not all_trips_marked:
         return make_response(
-            {"detail": "Not every trip is marked yet", "status": 409, "title": "Conflict", "type": "about:blank"},
-            409), None
+            {"detail": "Not every trip is marked yet", "status": 405, "title": "Method Not Allowed",
+             "type": "about:blank"}, 405), None
 
     if len(trips_to_export) > 0:
         # Retrieve active and existing frequent offenders
@@ -47,10 +47,16 @@ def export_trips(ended_after, ended_before):  # noqa: E501
         if trips_to_topic_response is False:
             return make_response(
                 {"detail": "Exported trips could not be send to topic", "status": 400,
-                 "title": "Internal Server Error", "type": "about:blank"}, 400)
+                 "title": "Bad Request", "type": "about:blank"}, 400)
 
         # Update all entities with transaction
-        export_processor.update_entities(fo_existing, fo_to_update, trips_to_export)
+        try:
+            export_processor.update_entities(fo_existing, fo_to_update, trips_to_export)
+        except Exception as e:
+            logging.error(e)
+            return make_response(
+                {"detail": "Exported trips could not be updated within the database", "status": 409,
+                 "title": "Conflict", "type": "about:blank"}, 409)
 
         return ContentResponse().create_content_response_freq_offenders(
             trips_to_export, fo_active, request.content_type)
