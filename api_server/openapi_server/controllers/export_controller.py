@@ -110,7 +110,6 @@ class ExportProcessor(object):
                         'driver_last_name': get_from_dict(trip, ['driver_info', 'driver_last_name']),
                         'driver_mail': get_from_dict(trip, ['driver_info', 'driver_mail']),
                     },
-                    'license': trip['license'],
                     'trips': [get_fo_trip(trip)]
                 }
                 current_fo[fo_id] = new_fo
