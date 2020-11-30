@@ -90,13 +90,15 @@ class AddFieldsToFirestoreEntities(object):
                             trips_in_time_window.append(doc.reference)
                             count_in_time_window += 1
 
-                        driver = self.trip_information['drivers'].get(doc_dict['license'])
-                        if driver:  # Add driver information to trip
-                            new_fields["department"] = self.process_department(driver.get("department"))
+                        drivers_list = self.trip_information['drivers'].get(doc_dict['license'])
+                        if drivers_list:  # Add driver information to trip
+                            driver = self.process_driver(drivers_list, doc_dict['started_at'], doc_dict['ended_at'])
                             new_fields["driver_info"] = driver
+                            new_fields["department"] = self.process_department(driver.get("department_id"))
                             count_driver += 1
 
                         batch.update(doc.reference, new_fields)  # Add new fields to batch
+
                 batch.commit()  # Committing changes within batch
             else:
                 batch_has_new_entities = False
@@ -139,16 +141,33 @@ class AddFieldsToFirestoreEntities(object):
         if sample_amount > 0 and len(trips_in_time_window) > 0:
             self.mark_trips_sample(trips_in_time_window, sample_amount)
 
+    @staticmethod
+    def process_driver(drivers_list, trip_start, trip_end):
+        if len(drivers_list) == 1:
+            return drivers_list[0]
+
+        cur_driver = {}
+        trip_start = convert_to_datetime(str(trip_start), 'google')
+        trip_end = convert_to_datetime(str(trip_end), 'google')
+
+        for driver in sorted(drivers_list, key=lambda i: i['driver_start_date'], reverse=True):
+            driver_start = convert_to_datetime(driver['driver_start_date'])
+            driver_end = convert_to_datetime(driver['driver_end_date']) if \
+                driver['driver_end_date'] is not None else trip_end
+
+            if driver_start <= trip_start and driver_end >= trip_end:
+                cur_driver = driver
+
+        return cur_driver
+
     def process_department(self, department):
         if department:
             department_id = int(department['id']) if isinstance(department, dict) else int(department)
             if self.trip_information['business_units'] and \
                     self.trip_information['business_units'].get(str(department_id)):
                 return self.trip_information['business_units'].get(str(department_id))
-            else:
-                return {'id': int(department_id)}
-        else:
-            return None
+
+        return None
 
 
 def entity_outside_time_window(value):
@@ -168,3 +187,14 @@ def entity_outside_time_window(value):
         return True
 
     return False
+
+
+def convert_to_datetime(string, type=None):
+    format = '%Y-%m-%d %H:%M:%S%z' if type == 'google' else '%Y-%m-%dT%H:%M:%SZ'
+    try:
+        value = datetime.strptime(string, format)
+    except (ValueError, TypeError, AttributeError):
+        pass
+        return None
+    else:
+        return value.strftime("%Y-%m-%dT%H:%M:%SZ")

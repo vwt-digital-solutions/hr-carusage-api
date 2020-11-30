@@ -16,11 +16,15 @@ def process(payload):
 
         for car in payload['leasecars']:
             license = car.get('car_license')
-            if not license and car.get('car_kind') != 'bedrijfsauto':
+            has_valid_fields = check_object_keys(license, car)
+            if not license or car.get('car_kind') != 'bedrijfsauto' or not has_valid_fields:
                 continue
 
             if license in cur_cars:
-                cur_cars[license].push(create_object(license, car))
+                cur_cars[license], exists = check_if_object_exist(cur_cars[license], license, car)
+
+                if not exists:
+                    cur_cars[license].append(create_object(license, car))
             else:
                 cur_cars[license] = [create_object(license, car)]
 
@@ -29,8 +33,38 @@ def process(payload):
         for key in cur_cars:  # Sort drivers on start date
             cur_cars[key] = sorted(cur_cars[key], key=lambda i: i['driver_start_date'], reverse=True)
 
-        # stg_processor.update_file(cur_cars)
+        if updated_cars > 0:
+            stg_processor.update_file(cur_cars)
+
         logging.info(f"Updated {updated_cars} lease cars")
+
+
+def check_object_keys(license, car):
+    existing_config = {
+        'driver_employee_number': False if not car.get('driver_employee_number') else True,
+        'driver_start_date': False if not car.get('driver_start_date') else True,
+        'department_id': False if not car.get('department_id') else True
+    }
+
+    for key in existing_config:
+        if not existing_config[key]:
+            logging.info(f"Car '{license}' is missing values: {existing_config}")
+            return False
+
+    return True
+
+
+def check_if_object_exist(list, key, n_object):
+    exists = False
+    for index, e_object in enumerate(list):
+        if convert_to_int(e_object['driver_employee_number']) == \
+                convert_to_int(n_object['driver_employee_number']) and \
+                convert_to_datetime(e_object['driver_start_date']) >= \
+                convert_to_datetime(n_object['driver_start_date']):
+            list[index] = create_object(key, n_object)
+            exists = True
+
+    return list, exists
 
 
 def create_object(key, dict):
@@ -44,8 +78,8 @@ def create_object(key, dict):
         "driver_first_name": dict.get('driver_first_name'),
         "driver_prefix_name": dict.get('driver_prefix_name'),
         "driver_last_name": dict.get('driver_last_name'),
-        "driver_start_date": convert_to_datetime(dict.get('driver_start_date')),
-        "driver_end_date": convert_to_datetime(dict.get('driver_end_date')),
+        "driver_start_date": convert_to_datetime_string(dict.get('driver_start_date')),
+        "driver_end_date": convert_to_datetime_string(dict.get('driver_end_date')),
         "department_id": convert_to_int(dict.get('department_id')),
         "department_name": dict.get('department_name'),
     }
@@ -54,7 +88,7 @@ def create_object(key, dict):
 def convert_to_int(string):
     try:
         value = int(string)
-    except ValueError:
+    except (ValueError, TypeError, AttributeError):
         pass
         return None
     else:
@@ -64,7 +98,17 @@ def convert_to_int(string):
 def convert_to_datetime(string):
     try:
         value = datetime.strptime(string, "%Y-%m-%dT%H:%M:%SZ")
-    except ValueError:
+    except (ValueError, TypeError, AttributeError):
+        pass
+        return None
+    else:
+        return value
+
+
+def convert_to_datetime_string(string):
+    try:
+        value = convert_to_datetime(string).strftime("%Y-%m-%dT%H:%M:%SZ")
+    except (ValueError, TypeError, AttributeError):
         pass
         return None
     else:

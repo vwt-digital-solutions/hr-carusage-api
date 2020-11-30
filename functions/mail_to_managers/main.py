@@ -135,7 +135,7 @@ def mail_to_managers(request):
 
     if not config.GMAIL_ACTIVE:
         logging.info('Gmail functionality is disabled, finishing execution')
-        return 200
+        return 'OK', 200
 
     try:
         email_addresses = FirestoreProcessor().get_email_addresses()
@@ -147,7 +147,7 @@ def mail_to_managers(request):
             logging.info("No email addresses have been found, email sending will be skipped")
     except Exception as e:
         logging.error('An error occurred: {}'.format(e))
-        return 400
+        return 'Bad Request', 400
 
 
 if __name__ == '__main__':

@@ -109,110 +109,56 @@ components:
         type: string
         format: date-time
       description: Filter for trips that ended before a specific date
-  responses:
-    "204":
-      description: No Content
-    "400":
-      content:
-        application/problem+json:
-          schema:
-            $ref: 'https://opensource.zalando.com/problem/schema.yaml#/Problem'
-      description: Bad Request
-    "401":
-      content:
-        application/problem+json:
-          schema:
-            $ref: 'https://opensource.zalando.com/problem/schema.yaml#/Problem'
-      description: No authorization token provided
-    "403":
-      content:
-        application/problem+json:
-          schema:
-            $ref: 'https://opensource.zalando.com/problem/schema.yaml#/Problem'
-      description: Provided token doesn't have the required scope
-    "404":
-      content:
-        application/problem+json:
-          schema:
-            $ref: 'https://opensource.zalando.com/problem/schema.yaml#/Problem'
-      description: Resource Not Found
   schemas:
-    TripFlatten:
-      description: Information about a trip flattened
-      example:
-        license: AB-123-C
-        started_at: 2020-01-01T12:00:00Z
-        ended_at: 2020-01-01T13:00:00Z
-        department: 123455
-        function_name: Driver
-        initial: An
-        last_name: Niem
-        prefix: O
-        registration_number: 123456
-        trip_kind: personal
-        description: Driver drove to a supermarket
-      properties:
-        license:
-          maxLength: 100
-          type: string
-        started_at:
-          maxLength: 100
-          type: string
-          format: date-time
-        ended_at:
-          maxLength: 100
-          type: string
-          format: date-time
-        department:
-          type: integer
-          format: int32
-          minimum: 0
-        function_name:
-          maxLength: 100
-          type: string
-        initial:
-          maxLength: 100
-          type: string
-        last_name:
-          maxLength: 100
-          type: string
-        prefix:
-          maxLength: 100
-          type: string
-        registration_number:
-          type: integer
-          format: int32
-          minimum: 0
-        trip_kind:
-          default: work
-          enum:
-            - work
-            - personal
-          type: string
-        description:
-          maxLength: 250
-          type: string
     TripsResponseFile:
       example:
         results:
-          - id: 4e15f728-d9a3-4914-8e28-c0b184ae5f5f
-            license: AB-123-C
-            started_at: 2020-01-01T12:00:00Z
-            ended_at: 2020-01-01T13:00:00Z
-            department: 123455
-            function_name: Driver
-            initial: An
-            last_name: Niem
-            prefix: O
-            registration_number: 123456
-            trip_kind: personal
-            description: Driver drove to a supermarket
-      properties:
-        results:
-          items:
-            $ref: '#/components/schemas/TripFlatten'
-          type: array
-      type: object
+          - kenteken: AB123C
+            begon_op: 2020-01-01T12:00:00Z
+            eindigde_op: 2020-01-01T13:00:00Z
+            voornaam: A
+            acternaam: Niem
+            afdeling_naam: test
+            afdeling_nummer: 123456
+            rit_soort: werk
+            rit_beschrijving: Driver drove to a supermarket
+      items:
+        properties:
+          kenteken:
+            maxLength: 100
+            type: string
+          begon_op:
+            maxLength: 100
+            type: string
+            format: date-time
+          eindigde_op:
+            maxLength: 100
+            type: string
+            format: date-time
+          voornaam:
+            maxLength: 100
+            type: string
+          acternaam:
+            maxLength: 100
+            type: string
+          afdeling_naam:
+            maxLength: 100
+            type: string
+          afdeling_nummer:
+            type: integer
+            format: int32
+            minimum: 0
+          rit_soort:
+            default: werk
+            enum:
+              - werk
+              - privé
+            type: string
+          rit_beschrijving:
+            maxLength: 100
+            type: string
+        type: object
+      type: array
   securitySchemes:
     oauth2:
       type: oauth2

@@ -66,7 +66,7 @@ def purge_entities(request):
         FirestoreProcessor(request.args['collection'], request.args['timedelta']).delete_entities()
     except Exception as e:
         logging.error('An error occurred: {}'.format(e))
-        return 400
+        return 'Bad Request', 400
 
 
 if __name__ == '__main__':
