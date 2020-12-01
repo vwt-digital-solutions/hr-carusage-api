@@ -170,6 +170,18 @@ class ExportProcessor(object):
 
         return fo_active, fo_existing, fo_to_update
 
+    @staticmethod
+    def add_export_info(trips_to_export):
+        exported_field = {
+            "exported_at": datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
+            "exported_by": g.user
+        }
+
+        for trip in trips_to_export:
+            trip['exported'] = exported_field
+
+        return trips_to_export
+
     def update_entities(self, fo_existing, fo_to_update, trips_to_export):
         transaction = self.db_client.transaction()
         update_in_transaction(transaction, self.db_client, self.collection_fo, self.collection_trips,
@@ -225,27 +237,20 @@ def update_in_transaction(transaction, db_client, collection_fo, collection_trip
             doc_ref = db_client.collection(collection_fo).document(fo_id)
             transaction.create(doc_ref, fo_existing[fo_id])
 
-    time_now = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
-    exported_field = {
-        "exported": {
-            "exported_at": time_now,
-            "exported_by": g.user
-        }
-    }
-
     for trip in trips_to_export:
-        transaction.update(trip['doc_reference'], exported_field)  # Update exported status on trips
+        trip_export_info = trip['exported']
+        transaction.update(trip['doc_reference'], {"exported": trip_export_info})  # Update exported status on trips
 
         # Create audit logging for trip
         audit_log = {
             "attributes_changed": {
                 "exported": {
-                    "new": exported_field["exported"]
+                    "new": trip_export_info
                 }
             },
             "table_id": trip['doc_id'],
             "table_name": collection_trips,
-            "timestamp": time_now,
+            "timestamp": trip_export_info['exported_at'],
             "user": g.user
         }
         doc_ref = db_client.collection(collection_audit).document()
