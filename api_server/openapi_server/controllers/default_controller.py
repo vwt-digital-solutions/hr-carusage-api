@@ -147,8 +147,8 @@ class ContentResponse(object):
 
             trips.append({
                 'kenteken': get_from_dict(trip, ['license']),
-                'begon_op': get_from_dict(trip, ['started_at']),
-                'eindigde_op': get_from_dict(trip, ['ended_at']),
+                'begon_op': datetime.strptime(get_from_dict(trip, ['started_at']), "%Y-%m-%dT%H:%M:%SZ"),
+                'eindigde_op': datetime.strptime(get_from_dict(trip, ['ended_at']), "%Y-%m-%dT%H:%M:%SZ"),
                 'voornaam': get_from_dict(trip, ['driver_info', 'driver_first_name']),
                 'achternaam': get_from_dict(trip, ['driver_info', 'driver_last_name']),
                 "personeelsnummer": get_from_dict(trip, ['driver_info', 'driver_employee_number']),
@@ -197,8 +197,8 @@ class ContentResponse(object):
                     "achternaam": driver_last_name,
                     "voornaam": driver_first_name,
                     "kenteken": car_license,
-                    "begon_op": get_from_dict(trip, ['started_at']),
-                    "eindigde_op": get_from_dict(trip, ['ended_at']),
+                    "begon_op": datetime.strptime(get_from_dict(trip, ['started_at']), "%Y-%m-%dT%H:%M:%SZ"),
+                    "eindigde_op": datetime.strptime(get_from_dict(trip, ['ended_at']), "%Y-%m-%dT%H:%M:%SZ"),
                     "soort": 'werk' if trip_kind == 'work' else ('privé' if trip_kind == 'personal' else None),
                     "beschrijving": get_from_dict(trip, ['trip_description'])
                 })

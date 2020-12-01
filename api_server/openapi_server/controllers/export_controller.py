@@ -132,7 +132,7 @@ class ExportProcessor(object):
 
                 active_trips = []
                 for trip in doc_dict['trips']:
-                    if trip['ended_at'].replace(tzinfo=None) >= fo_time_window:
+                    if datetime.strptime(trip['ended_at'], '%Y-%m-%dT%H:%M:%SZ') >= fo_time_window:
                         active_trips.append(trip)
 
                 doc_dict['trips'] = active_trips
@@ -225,7 +225,7 @@ def update_in_transaction(transaction, db_client, collection_fo, collection_trip
             doc_ref = db_client.collection(collection_fo).document(fo_id)
             transaction.create(doc_ref, fo_existing[fo_id])
 
-    time_now = datetime.utcnow()
+    time_now = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
     exported_field = {
         "exported": {
             "exported_at": time_now,
@@ -245,7 +245,7 @@ def update_in_transaction(transaction, db_client, collection_fo, collection_trip
             },
             "table_id": trip['doc_id'],
             "table_name": collection_trips,
-            "timestamp": time_now.isoformat(timespec="seconds") + 'Z',
+            "timestamp": time_now,
             "user": g.user
         }
         doc_ref = db_client.collection(collection_audit).document()
