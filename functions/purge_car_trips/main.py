@@ -28,7 +28,6 @@ class FirestoreProcessor(object):
             query = self.db_client.collection(self.collection)
 
             query = query.where("ended_at", "<", self.date_week_end)
-            query = query.where("exported.exported_at", "<", self.today)
             query = query.order_by("ended_at", "ASCENDING")
             query = query.limit(batch_limit)
 
@@ -47,7 +46,11 @@ class FirestoreProcessor(object):
                     batch_last_reference = docs_list[-1]
 
                 for doc in docs_list:
-                    batch.delete(doc.reference)  # Delete entity
+                    doc_dict = doc.to_dict()
+                    if doc_dict['outside_time_window'] is False or \
+                            ('exported' in doc_dict and doc_dict['exported']['exported_at'] < self.today):
+                        batch.delete(doc.reference)  # Delete entity
+
                     count_entities += 1
 
                 batch.commit()  # Committing changes within batch
