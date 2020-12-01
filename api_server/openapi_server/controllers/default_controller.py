@@ -27,7 +27,7 @@ def export_trips(ended_after, ended_before):  # noqa: E501
 
     if 'user' not in g:  # Check if user is logged in
         return make_response(
-            {"detail": "The user is not authorised to make this request", "status": 401, "title": "Unauthorized",
+            {"detail": "De gebruiker is niet bevoegd om dit verzoek te doen", "status": 401, "title": "Unauthorized",
              "type": "about:blank"}, 401)
 
     export_processor = ExportProcessor(ended_after, ended_before)
@@ -35,7 +35,7 @@ def export_trips(ended_after, ended_before):  # noqa: E501
 
     if not all_trips_marked:
         return make_response(
-            {"detail": "Not every trip is marked yet", "status": 405, "title": "Method Not Allowed",
+            {"detail": "Nog niet elke rit is gemarkeerd", "status": 405, "title": "Method Not Allowed",
              "type": "about:blank"}, 405), None
 
     if len(trips_to_export) > 0:
@@ -46,7 +46,7 @@ def export_trips(ended_after, ended_before):  # noqa: E501
         trips_to_topic_response = export_processor.exported_trips_to_topic(trips_to_export)
         if trips_to_topic_response is False:
             return make_response(
-                {"detail": "Exported trips could not be send to topic", "status": 400,
+                {"detail": "Er is iets fout gegaan tijdens het archiveren van de ritten", "status": 400,
                  "title": "Bad Request", "type": "about:blank"}, 400)
 
         # Update all entities with transaction
@@ -55,7 +55,7 @@ def export_trips(ended_after, ended_before):  # noqa: E501
         except Exception as e:
             logging.error(e)
             return make_response(
-                {"detail": "Exported trips could not be updated within the database", "status": 409,
+                {"detail": "Er is iets fout gegaan tijdens het opslaan van de ritten", "status": 409,
                  "title": "Conflict", "type": "about:blank"}, 409)
 
         return ContentResponse().create_content_response_freq_offenders(
@@ -115,7 +115,7 @@ def get_open_trips(db_client, ended_after, ended_before):
             return ContentResponse().create_content_response(response_open_trips, request.content_type)
 
     return make_response(
-        {"detail": "There are no open trips", "status": 204, "title": "No Content",
+        {"detail": "Er zijn geen open ritten", "status": 204, "title": "No Content",
          "type": "about:blank"}, 204)
 
 
@@ -236,7 +236,7 @@ class ContentResponse(object):
         except Exception as e:
             logging.info(f"Generating XLSX file failed: {str(e)}")
             return make_response(
-                {"detail": "Something went wrong during the generation of a XLSX file", "status": 400,
+                {"detail": "Er is iets misgegaan tijdens het genereren van het Excel bestand", "status": 400,
                  "title": "Bad Request", "type": "about:blank"}, 400)
 
     def response_xlsx(self, response_sheet1):
@@ -259,7 +259,7 @@ class ContentResponse(object):
         except Exception as e:
             logging.info(f"Generating XLSX file failed: {str(e)}")
             return make_response(
-                {"detail": "Something went wrong during the generation of a XLSX file", "status": 400,
+                {"detail": "Er is iets misgegaan tijdens het genereren van het Excel bestand", "status": 400,
                  "title": "Bad Request", "type": "about:blank"}, 400)
 
     def create_content_response_freq_offenders(self, response_sheet1, response_sheet2, content_type):
@@ -269,7 +269,7 @@ class ContentResponse(object):
             return self.response_xlsx_freq_offenders(response_sheet1, response_sheet2)
 
         return make_response(
-            {"detail": f"The content-type '{content_type}' is not supported", "status": 400, "title": "Bad Request",
+            {"detail": f"Het content-type '{content_type}' wordt niet ondersteund", "status": 400, "title": "Bad Request",
              "type": "about:blank"}, 400)
 
     def create_content_response(self, response_sheet1, content_type):
@@ -279,5 +279,5 @@ class ContentResponse(object):
             return self.response_xlsx(response_sheet1)
 
         return make_response(
-            {"detail": f"The content-type '{content_type}' is not supported", "status": 400, "title": "Bad Request",
-             "type": "about:blank"}, 400)
+            {"detail": f"Het content-type '{content_type}' wordt niet ondersteund", "status": 400,
+             "title": "Bad Request", "type": "about:blank"}, 400)
