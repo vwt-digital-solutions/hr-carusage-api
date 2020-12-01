@@ -47,7 +47,8 @@ class FirestoreProcessor(object):
 
                 for doc in docs_list:
                     doc_dict = doc.to_dict()
-                    if 'exported' in doc_dict and doc_dict['exported']['exported_at'] < self.today:
+                    if doc_dict['outside_time_window'] is False or \
+                            ('exported' in doc_dict and doc_dict['exported']['exported_at'] < self.today):
                         batch.delete(doc.reference)  # Delete entity
 
                     count_entities += 1
