@@ -158,9 +158,9 @@ class ExportProcessor(object):
 
                 if len(fo_existing[fo_id]['trips']) >= 3:  # If FO in DB has more than 3 trips
                     fo_active[fo_id] = fo_existing[fo_id]
-                    fo_to_update[fo_existing[fo_id]['doc_reference']] = 'delete'
+                    fo_to_update[fo_id] = 'delete'
                 else:
-                    fo_to_update[fo_existing[fo_id]['doc_reference']] = 'update'
+                    fo_to_update[fo_id] = 'update'
             else:
                 if len(fo_new[fo_id]['trips']) >= 3:  # If new FO has more than 3 trips
                     fo_active[fo_id] = fo_new[fo_id]
