@@ -42,6 +42,8 @@ def export_trips(ended_after, ended_before):  # noqa: E501
         # Retrieve active and existing frequent offenders
         fo_active, fo_existing, fo_to_update = export_processor.process_frequent_offenders(trips_to_export)
 
+        trips_to_export = export_processor.add_export_info(trips_to_export)
+
         # Send trips to topic
         trips_to_topic_response = export_processor.exported_trips_to_topic(trips_to_export)
         if trips_to_topic_response is False:
