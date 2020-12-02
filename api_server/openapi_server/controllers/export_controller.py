@@ -229,10 +229,11 @@ class ExportProcessor(object):
 def update_in_transaction(transaction, db_client, collection_fo, collection_trips, collection_audit, fo_existing,
                           fo_to_update, trips_to_export):
     for fo_id in fo_to_update:  # Create, update or delete FO from table
+        fo_reference = fo_existing[fo_id].get('doc_reference')
         if fo_to_update[fo_id] == 'delete':
-            transaction.delete(fo_id)
+            transaction.delete(fo_reference)
         elif fo_to_update[fo_id] == 'update':
-            transaction.update(fo_id, {'trips': fo_existing[fo_id]['trips']})
+            transaction.update(fo_reference, {'trips': fo_existing[fo_id]['trips']})
         else:
             doc_ref = db_client.collection(collection_fo).document(fo_id)
             transaction.create(doc_ref, fo_existing[fo_id])
