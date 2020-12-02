@@ -16,9 +16,9 @@ def process(payload):
         for org in payload['organigram']:
             department_id = convert_to_int(org.get('department_id'))
             cur_orgs[str(department_id)] = {
-                "parent_id": convert_to_int(org.get('department_parent_id')),
-                "id": department_id,
-                "name": org.get('department_name'),
+                "department_parent_id": convert_to_int(org.get('department_parent_id')),
+                "department_id": department_id,
+                "department_name": org.get('department_name'),
                 "manager_name": org.get('manager_name'),
                 "manager_mail": org.get('manager_mail')
             }
