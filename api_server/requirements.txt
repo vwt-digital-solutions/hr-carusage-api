@@ -7,7 +7,7 @@ click==7.1.2
 clickclick==20.10.2
 connexion==2.7.0
 cryptography==3.2
-dataclasses==0.8
+dataclasses==0.7
 Flask==1.1.2
 Flask-AuditLog==1.0
 Flask-Cors==3.0.8
@@ -37,7 +37,6 @@ mypy-extensions==0.4.3
 numpy==1.19.4
 openapi-spec-validator==0.2.9
 pandas==1.1.4
-pkg-resources==0.0.0
 proto-plus==1.11.0
 protobuf==3.14.0
 pyasn1==0.4.8
