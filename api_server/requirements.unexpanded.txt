@@ -1,11 +1,12 @@
 connexion==2.7.0
+dataclasses==0.6
 Flask==1.1.2
 Flask-AuditLog==1.0
 Flask-Cors==3.0.8
 Flask-No-Cache==1.0
 Flask-SSLify==0.1.5
 Flask-Testing==0.7.1
-gobits==1.0.3
+gobits==1.0.4
 google-api-core==1.23.0
 google-auth==1.23.0
 google-cloud-core==1.3.0
