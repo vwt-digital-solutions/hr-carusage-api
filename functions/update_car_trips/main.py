@@ -6,6 +6,7 @@ from firestore import upload_to_firestore
 import sys
 import logging
 import os
+import copy
 
 logging.basicConfig(level=logging.INFO)
 
@@ -48,6 +49,19 @@ def make_trips(file_name_locations):
                 when = location['when']
                 when_datetime = datetime.datetime.strptime(when, "%Y-%m-%dT%H:%M:%S")
                 location['when'] = when_datetime
+                # Check if the car is stationary and after and before that moving
+                # That's the end of the trip and beginning a new trip
+                if i + 1 < len(locations) - 1 and location_checked is False:
+                    if location['what'] in ["Stationary", "ExternalPowerChange"] and \
+                            locations[i - 1]['what'] == "Moving" and locations[i + 1]['what'] == "Moving":
+                        # Add it to the trip
+                        if location not in trip:
+                            trip.append(location)
+                        # Add trip to trips
+                        trips.append(trip)
+                        # And start a new trip
+                        trip = [copy.deepcopy(location)]
+                        location_checked = True
                 # Check if the car is stationary and after that moving
                 # That's the beginning of the trip
                 if i + 1 < len(locations)-1 and location_checked is False:
