@@ -251,22 +251,21 @@ def entrypoint(request):
         logging.error("Required argument FILE_NAME missing")
     if not file_name_locations.endswith(".json"):
         logging.error("Argument FILE_NAME should have json extension")
+
     # Make trips
     car_trips = make_trips(file_name_locations)
-    # Patch trips
-    car_trips = patch_trips(car_trips, file_name_locations)
-    # Upload to firestore
-    upload_to_firestore_success = upload_to_firestore(car_trips)
-    if not upload_to_firestore_success:
-        sys.exit(1)
-    logging.info("Finished uploading trips to firestore")
-    # Safe car trips locally
-    # for car_trip in car_trips:
-    #     for trip in car_trip['trips']:
-    #         for loc in trip:
-    #             loc['when'] = loc['when'].isoformat()
-    # with open('trips.json', 'w', encoding='utf-8') as f:
-    #     json.dump(car_trips, f, ensure_ascii=False, indent=2)
+
+    if car_trips:
+        # Patch trips
+        car_trips = patch_trips(car_trips, file_name_locations)
+
+        # Upload to firestore
+        upload_to_firestore_success = upload_to_firestore(car_trips)
+        if not upload_to_firestore_success:
+            sys.exit(1)
+        logging.info("Finished uploading trips to firestore")
+    else:
+        logging.info("No new car trips found")
 
 
 if __name__ == '__main__':
