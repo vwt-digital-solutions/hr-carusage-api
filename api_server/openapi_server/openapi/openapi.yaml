@@ -17,7 +17,7 @@ info:
 servers:
   - url: /
 paths:
-  /export/trips:
+  /exports/trips:
     get:
       description: Returns an export with a list of all car trips
       operationId: export_trips
@@ -54,7 +54,7 @@ paths:
       x-openapi-router-controller: openapi_server.controllers.default_controller
       security:
         - oauth2: [carusage.read]
-  /check/open-trips:
+  /checks/open-trips:
     get:
       description: Returns a list of all car trips that have not been exported yet
       operationId: check_open_trips
