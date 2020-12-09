@@ -35,8 +35,8 @@ def export_trips(ended_after, ended_before):  # noqa: E501
 
     if not all_trips_marked:
         return make_response(
-            {"detail": "Nog niet elke rit is gemarkeerd", "status": 405, "title": "Method Not Allowed",
-             "type": "about:blank"}, 405), None
+            {"detail": "Nog niet elke rit is gemarkeerd", "status": 406, "title": "Not Acceptable",
+             "type": "about:blank"}, 406), None
 
     if len(trips_to_export) > 0:
         # Retrieve active and existing frequent offenders
