@@ -1,5 +1,7 @@
 import logging
+import operator
 
+from functools import reduce
 from datetime import datetime, timedelta, timezone
 from google.cloud import firestore
 
@@ -47,11 +49,14 @@ class FirestoreProcessor(object):
 
                 for doc in docs_list:
                     doc_dict = doc.to_dict()
-                    if doc_dict['outside_time_window'] is False or \
-                            ('exported' in doc_dict and doc_dict['exported']['exported_at'] < self.today):
-                        batch.delete(doc.reference)  # Delete entity
 
-                    count_entities += 1
+                    outside_time_window = get_from_dict(doc_dict, ['outside_time_window'])
+                    exported_at = convert_to_datetime(get_from_dict(doc_dict, ['exported', 'exported_at']))
+
+                    if outside_time_window is False or (exported_at and exported_at < self.today):
+                        batch.delete(doc.reference)  # Delete entity
+                        count_entities += 1
+                        continue
 
                 batch.commit()  # Committing changes within batch
             else:
@@ -72,6 +77,22 @@ def purge_entities(request):
     except Exception as e:
         logging.error('An error occurred: {}'.format(e))
         return 'Bad Request', 400
+
+
+def get_from_dict(data_dict, map_list):
+    """Returns a dictionary based on a mapping"""
+    try:
+        return reduce(operator.getitem, map_list, data_dict)
+    except KeyError:
+        return None
+
+
+def convert_to_datetime(string):
+    try:
+        return datetime.strptime(string, '%Y-%m-%dT%H:%M:%SZ').astimezone(tz=timezone.utc)
+    except (ValueError, TypeError, AttributeError):
+        pass
+        return None
 
 
 if __name__ == '__main__':
