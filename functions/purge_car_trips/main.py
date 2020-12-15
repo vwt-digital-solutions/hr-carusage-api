@@ -66,7 +66,9 @@ def purge_entities(request):
             raise ValueError(f"Request is missing the essential configuration key '{key}'")
 
     try:
-        FirestoreProcessor(request.args['collection'], request.args['timedelta']).delete_entities()
+        r_collection = str(request.args['collection'])
+        r_timedelta = int(request.args['timedelta'])
+        FirestoreProcessor(r_collection, r_timedelta).delete_entities()
     except Exception as e:
         logging.error('An error occurred: {}'.format(e))
         return 'Bad Request', 400
