@@ -91,11 +91,15 @@ class AddFieldsToFirestoreEntities(object):
                             count_in_time_window += 1
 
                         drivers_list = self.trip_information['drivers'].get(doc_dict['license'])
-                        if drivers_list:  # Add driver information to trip
-                            driver = self.process_driver(drivers_list, doc_dict['started_at'], doc_dict['ended_at'])
+                        driver = self.process_driver(drivers_list, doc_dict['started_at'], doc_dict['ended_at'])
+
+                        if driver:  # Add driver information to trip
                             new_fields["driver_info"] = driver
                             new_fields["department"] = self.process_department(driver.get("department_id"))
                             count_driver += 1
+                        else:
+                            new_fields["driver_info"] = None
+                            new_fields["department"] = None
 
                         batch.update(doc.reference, new_fields)  # Add new fields to batch
 
@@ -143,10 +147,12 @@ class AddFieldsToFirestoreEntities(object):
 
     @staticmethod
     def process_driver(drivers_list, trip_start, trip_end):
+        if not drivers_list:
+            return None
         if len(drivers_list) == 1:
             return drivers_list[0]
 
-        cur_driver = {}
+        cur_driver = None
         trip_start = convert_to_datetime(str(trip_start), 'google')
         trip_end = convert_to_datetime(str(trip_end), 'google')
 

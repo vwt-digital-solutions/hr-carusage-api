@@ -1,6 +1,7 @@
 import config
-from jwkaas import JWKaas
+import logging
 
+from jwkaas import JWKaas
 from flask import request, g
 
 my_jwkaas = None
@@ -9,6 +10,11 @@ if hasattr(config, 'OAUTH_JWKS_URL'):
     my_jwkaas = JWKaas(config.OAUTH_EXPECTED_AUDIENCE,
                        config.OAUTH_EXPECTED_ISSUER,
                        jwks_url=config.OAUTH_JWKS_URL)
+
+if hasattr(config, 'OAUTH_E2E_JWKS_URL'):
+    my_e2e_jwkaas = JWKaas(config.OAUTH_E2E_EXPECTED_AUDIENCE,
+                           config.OAUTH_E2E_EXPECTED_ISSUER,
+                           jwks_url=config.OAUTH_E2E_JWKS_URL)
 
 
 def info_from_oAuth2(token):
@@ -25,6 +31,13 @@ def info_from_oAuth2(token):
     """
     result = my_jwkaas.get_connexion_token_info(token)
     g.ip = request.remote_addr
+
+    # Check if e2e test token is configured
+    if result is None and my_e2e_jwkaas is not None:
+        token_info = my_e2e_jwkaas.get_connexion_token_info(token)
+        if token_info is not None and 'appid' in token_info and token_info['appid'] == config.OAUTH_E2E_APPID:
+            logging.warning('Approved e2e access token for appid [%s]', token_info['appid'])
+            result = {'scopes': config.OAUTH_E2E_SCOPES, 'sub': 'e2e', 'upn': 'e2e-technical-user'}
 
     if result is not None:
         g.user = result.get('upn')
