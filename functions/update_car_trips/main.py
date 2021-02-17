@@ -255,7 +255,7 @@ def entrypoint(request):
     # Make trips
     car_trips = make_trips(file_name_locations)
 
-    if car_trips:
+    if len(car_trips) > 0:
         # Patch trips
         car_trips = patch_trips(car_trips, file_name_locations)
 
