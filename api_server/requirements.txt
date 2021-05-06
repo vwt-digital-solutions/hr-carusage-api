@@ -10,7 +10,7 @@ cryptography==3.3.2
 dataclasses==0.6
 Flask==1.1.2
 Flask-AuditLog==1.0
-Flask-Cors==3.0.8
+Flask-Cors==3.0.9
 Flask-No-Cache==1.0
 Flask-SSLify==0.1.5
 Flask-Testing==0.7.1
