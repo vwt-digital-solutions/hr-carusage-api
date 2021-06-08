@@ -15,7 +15,7 @@ googleapis-common-protos==1.52.0
 google-cloud-pubsub==2.1.0
 grpcio==1.33.2
 gunicorn==20.0.4
-jwkaas==0.9
+jwkaas==1.0.1
 pandas==1.1.4
 swagger-ui-bundle==0.0.6
 XlsxWriter==1.3.7
