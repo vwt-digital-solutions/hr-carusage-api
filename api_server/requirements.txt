@@ -6,7 +6,7 @@ chardet==4.0.0
 click==8.0.1
 clickclick==20.10.2
 connexion==2.7.0
-cryptography==3.4.7
+cryptography==39.0.1
 dataclasses==0.6
 Flask==1.1.2
 Flask-AuditLog==1.0
